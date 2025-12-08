@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Couronne de Vie - Gestion des Recettes de Taxi</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-taxi"></i>
+                <span>Couronne de Vie</span>
+            </div>
+            <button class="nav-toggle" id="navToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <ul class="nav-menu" id="navMenu">
+                <li><a href="#" data-page="home" class="nav-link active"><i class="fas fa-home"></i> Accueil</a></li>
+                <li><a href="#" data-page="add-recipe" class="nav-link"><i class="fas fa-plus-circle"></i> Ajouter</a></li>
+                <li><a href="#" data-page="list-recipes" class="nav-link"><i class="fas fa-list"></i> Liste</a></li>
+                <li><a href="#" data-page="statistics" class="nav-link"><i class="fas fa-chart-bar"></i> Statistiques</a></li>
+                <li><a href="#" data-page="taxis" class="nav-link"><i class="fas fa-car"></i> Taxis</a></li>
+                <li><a href="#" data-page="drivers" class="nav-link"><i class="fas fa-user"></i> Chauffeurs</a></li>
+                <li><a href="#" data-page="report" class="nav-link"><i class="fas fa-file-pdf"></i> Rapport</a></li>
+                <li><a href="#" data-page="settings" class="nav-link"><i class="fas fa-cog"></i> Paramètres</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Contenu principal -->
+    <main class="main-content">
+        <!-- Page Accueil -->
+        <section id="home" class="page active">
+            <div class="page-header">
+                <h1><i class="fas fa-home"></i> Accueil</h1>
+                <p>Bienvenue dans le système de gestion de recettes de taxi - <strong>COURONNE DE VIE</strong></p>
+            </div>
+            <div class="dashboard-grid">
+                <div class="dashboard-card" data-page="add-recipe">
+                    <div class="card-icon"><i class="fas fa-plus-circle"></i></div>
+                    <h3>Ajouter une Recette</h3>
+                    <p>Enregistrer une nouvelle recette quotidienne</p>
+                </div>
+                <div class="dashboard-card" data-page="list-recipes">
+                    <div class="card-icon"><i class="fas fa-list"></i></div>
+                    <h3>Liste des Recettes</h3>
+                    <p>Consulter toutes les recettes enregistrées</p>
+                </div>
+                <div class="dashboard-card" data-page="statistics">
+                    <div class="card-icon"><i class="fas fa-chart-bar"></i></div>
+                    <h3>Statistiques</h3>
+                    <p>Visualiser les performances et analyses</p>
+                </div>
+                <div class="dashboard-card" data-page="taxis">
+                    <div class="card-icon"><i class="fas fa-car"></i></div>
+                    <h3>Gestion des Taxis</h3>
+                    <p>Gérer les véhicules et leurs informations</p>
+                </div>
+                <div class="dashboard-card" data-page="drivers">
+                    <div class="card-icon"><i class="fas fa-user"></i></div>
+                    <h3>Gestion des Chauffeurs</h3>
+                    <p>Gérer les chauffeurs et leurs données</p>
+                </div>
+                <div class="dashboard-card" data-page="report">
+                    <div class="card-icon"><i class="fas fa-file-pdf"></i></div>
+                    <h3>Rapport Mensuel</h3>
+                    <p>Générer un rapport mensuel complet</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Page Ajouter une Recette -->
+        <section id="add-recipe" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-plus-circle"></i> Ajouter une Recette Quotidienne</h1>
+            </div>
+            <div class="form-container">
+                <form id="addRecipeForm">
+                    <div class="form-group">
+                        <label for="matricule"><i class="fas fa-car"></i> Numéro d'immatriculation *</label>
+                        <select id="matricule" name="matricule" required>
+                            <option value="">Sélectionner un taxi</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="date"><i class="fas fa-calendar"></i> Date du jour *</label>
+                        <input type="date" id="date" name="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="recetteNormale"><i class="fas fa-money-bill-wave"></i> Recette normale du jour (FCFA) *</label>
+                        <input type="number" id="recetteNormale" name="recetteNormale" min="0" step="100" required>
+                        <div class="quick-values">
+                            <button type="button" class="btn-quick" data-value="9000">9000</button>
+                            <button type="button" class="btn-quick" data-value="12000">12000</button>
+                            <button type="button" class="btn-quick" data-value="15000">15000</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="montantVerse"><i class="fas fa-coins"></i> Montant réellement versé (FCFA) *</label>
+                        <input type="number" id="montantVerse" name="montantVerse" min="0" step="100" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="chauffeur"><i class="fas fa-user"></i> Chauffeur associé *</label>
+                        <select id="chauffeur" name="chauffeur" required>
+                            <option value="">Sélectionner un chauffeur</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="typeCourse"><i class="fas fa-route"></i> Type de course</label>
+                        <select id="typeCourse" name="typeCourse">
+                            <option value="ville">Ville</option>
+                            <option value="aeroport">Aéroport</option>
+                            <option value="longue-distance">Longue distance</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="remarques"><i class="fas fa-comment"></i> Remarques</label>
+                        <textarea id="remarques" name="remarques" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <div id="resultBadge" class="result-badge" style="display: none;"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
+                        <button type="reset" class="btn btn-secondary"><i class="fas fa-redo"></i> Réinitialiser</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Page Liste des Recettes -->
+        <section id="list-recipes" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-list"></i> Liste des Recettes</h1>
+            </div>
+            <div class="search-filters">
+                <div class="search-group">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Rechercher par matricule, date ou chauffeur...">
+                </div>
+                <div class="filter-group">
+                    <select id="filterMatricule">
+                        <option value="">Tous les taxis</option>
+                    </select>
+                    <select id="filterChauffeur">
+                        <option value="">Tous les chauffeurs</option>
+                    </select>
+                    <input type="date" id="filterDate">
+                    <button class="btn btn-secondary" id="clearFilters"><i class="fas fa-times"></i> Effacer</button>
+                </div>
+            </div>
+            <div class="table-container">
+                <table id="recipesTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="date">
+                                Date <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="matricule">
+                                Matricule <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="recetteNormale">
+                                Recette normale <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="montantVerse">
+                                Montant versé <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="resultat">
+                                Résultat <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th class="sortable" data-sort="chauffeur">
+                                Chauffeur <i class="fas fa-sort sort-icon"></i>
+                            </th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recipesTableBody">
+                        <tr>
+                            <td colspan="7" class="empty-state">Aucune recette enregistrée</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Page Détail d'une Recette -->
+        <section id="recipe-detail" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-info-circle"></i> Détail de la Recette</h1>
+                <button class="btn btn-secondary" id="backToList"><i class="fas fa-arrow-left"></i> Retour</button>
+            </div>
+            <div class="detail-container" id="recipeDetailContent">
+                <!-- Contenu dynamique -->
+            </div>
+        </section>
+
+        <!-- Page Statistiques -->
+        <section id="statistics" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-chart-bar"></i> Statistiques</h1>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-calendar-day"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Recettes Aujourd'hui</h3>
+                        <p class="stat-value" id="todayTotal">0 FCFA</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Recettes Ce Mois</h3>
+                        <p class="stat-value" id="monthTotal">0 FCFA</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-arrow-down"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Déficits</h3>
+                        <p class="stat-value stat-negative" id="totalDeficit">0 FCFA</p>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon"><i class="fas fa-arrow-up"></i></div>
+                    <div class="stat-content">
+                        <h3>Total Surplus</h3>
+                        <p class="stat-value stat-positive" id="totalSurplus">0 FCFA</p>
+                    </div>
+                </div>
+            </div>
+            <div class="charts-container">
+                <div class="chart-card">
+                    <h3>Recettes par Jour</h3>
+                    <canvas id="chartDaily"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Recettes par Matricule</h3>
+                    <canvas id="chartMatricule"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Déficits du Mois</h3>
+                    <canvas id="chartDeficit"></canvas>
+                </div>
+            </div>
+            <div class="drivers-ranking">
+                <h3><i class="fas fa-trophy"></i> Classement des Chauffeurs</h3>
+                <div id="driversRankingList"></div>
+            </div>
+        </section>
+
+        <!-- Page Gestion des Taxis -->
+        <section id="taxis" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-car"></i> Gestion des Taxis</h1>
+                <button class="btn btn-primary" id="addTaxiBtn"><i class="fas fa-plus"></i> Ajouter un Taxi</button>
+            </div>
+            <div class="table-container">
+                <table id="taxisTable">
+                    <thead>
+                        <tr>
+                            <th>Matricule</th>
+                            <th>Marque/Modèle</th>
+                            <th>Propriétaire</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taxisTableBody">
+                        <tr>
+                            <td colspan="4" class="empty-state">Aucun taxi enregistré</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Page Gestion des Chauffeurs -->
+        <section id="drivers" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-user"></i> Gestion des Chauffeurs</h1>
+                <button class="btn btn-primary" id="addDriverBtn"><i class="fas fa-plus"></i> Ajouter un Chauffeur</button>
+            </div>
+            <div class="table-container">
+                <table id="driversTable">
+                    <thead>
+                        <tr>
+                            <th>Photo</th>
+                            <th>Nom</th>
+                            <th>Téléphone</th>
+                            <th>Taxi associé</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="driversTableBody">
+                        <tr>
+                            <td colspan="5" class="empty-state">Aucun chauffeur enregistré</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Page Rapport Mensuel -->
+        <section id="report" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-file-pdf"></i> Rapport Mensuel</h1>
+                <div class="report-controls">
+                    <select id="reportMonth">
+                        <option value="">Sélectionner un mois</option>
+                    </select>
+                    <button class="btn btn-primary" id="generateReport"><i class="fas fa-file-pdf"></i> Générer le Rapport</button>
+                </div>
+            </div>
+            <div class="report-container" id="reportContent">
+                <p class="empty-state">Sélectionnez un mois pour générer le rapport</p>
+            </div>
+        </section>
+
+        <!-- Page Paramètres -->
+        <section id="settings" class="page">
+            <div class="page-header">
+                <h1><i class="fas fa-cog"></i> Paramètres</h1>
+            </div>
+            <div class="settings-container">
+                <div class="settings-section">
+                    <h3><i class="fas fa-money-bill-wave"></i> Valeurs par défaut de la recette quotidienne</h3>
+                    <div class="form-group">
+                        <label>Valeur 1 (FCFA)</label>
+                        <input type="number" id="defaultValue1" min="0" step="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Valeur 2 (FCFA)</label>
+                        <input type="number" id="defaultValue2" min="0" step="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Valeur 3 (FCFA)</label>
+                        <input type="number" id="defaultValue3" min="0" step="100">
+                    </div>
+                    <button class="btn btn-primary" id="saveDefaults"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+                <div class="settings-section">
+                    <h3><i class="fas fa-palette"></i> Personnalisation des couleurs</h3>
+                    <div class="form-group">
+                        <label>Couleur principale</label>
+                        <input type="color" id="primaryColor" value="#4CAF50">
+                    </div>
+                    <div class="form-group">
+                        <label>Couleur secondaire</label>
+                        <input type="color" id="secondaryColor" value="#2196F3">
+                    </div>
+                    <button class="btn btn-primary" id="saveColors"><i class="fas fa-save"></i> Appliquer</button>
+                </div>
+                <div class="settings-section">
+                    <h3><i class="fas fa-bell"></i> Notifications</h3>
+                    <div class="form-group">
+                        <label>Heure du rappel quotidien</label>
+                        <input type="time" id="reminderTime" value="18:00">
+                        <small style="color: #666; font-size: 0.9rem; display: block; margin-top: 0.5rem;">
+                            Recevez une notification si aucune recette n'a été saisie pour la journée
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="enableReminders" checked>
+                            Activer les rappels quotidiens
+                        </label>
+                    </div>
+                    <button class="btn btn-primary" id="saveReminders"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+                <div class="settings-section">
+                    <h3><i class="fas fa-database"></i> Gestion des données</h3>
+                    <div class="settings-actions">
+                        <button class="btn btn-success" id="exportJSON"><i class="fas fa-download"></i> Exporter JSON</button>
+                        <button class="btn btn-success" id="exportCSV"><i class="fas fa-download"></i> Exporter CSV</button>
+                        <label class="btn btn-info">
+                            <i class="fas fa-upload"></i> Importer JSON
+                            <input type="file" id="importJSON" accept=".json" style="display: none;">
+                        </label>
+                        <label class="btn btn-info">
+                            <i class="fas fa-upload"></i> Importer CSV
+                            <input type="file" id="importCSV" accept=".csv" style="display: none;">
+                        </label>
+                        <button class="btn btn-danger" id="clearData"><i class="fas fa-trash"></i> Effacer toutes les données</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modals -->
+    <!-- Modal Taxi -->
+    <div id="taxiModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="taxiModalTitle">Ajouter un Taxi</h2>
+            <form id="taxiForm">
+                <input type="hidden" id="taxiId">
+                <div class="form-group">
+                    <label>Matricule *</label>
+                    <input type="text" id="taxiMatricule" required>
+                </div>
+                <div class="form-group">
+                    <label>Marque et Modèle</label>
+                    <input type="text" id="taxiMarque">
+                </div>
+                <div class="form-group">
+                    <label>Nom du Propriétaire *</label>
+                    <input type="text" id="taxiProprietaire" value="COURONNE DE VIE" readonly required>
+                    <small style="color: #666; font-size: 0.9rem;">Tous les véhicules appartiennent à l'entreprise COURONNE DE VIE</small>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary close-modal">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Chauffeur -->
+    <div id="driverModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="driverModalTitle">Ajouter un Chauffeur</h2>
+            <form id="driverForm">
+                <input type="hidden" id="driverId">
+                <div class="form-group">
+                    <label>Nom du Chauffeur *</label>
+                    <input type="text" id="driverNom" required>
+                </div>
+                <div class="form-group">
+                    <label>Téléphone *</label>
+                    <input type="tel" id="driverTelephone" required>
+                </div>
+                <div class="form-group">
+                    <label>Taxi associé *</label>
+                    <select id="driverTaxi" required>
+                        <option value="">Sélectionner un taxi</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Photo</label>
+                    <input type="file" id="driverPhoto" accept="image/*">
+                    <div id="driverPhotoPreview"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary close-modal">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
