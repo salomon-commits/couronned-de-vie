@@ -28,6 +28,12 @@
     box-sizing: border-box;
 }
 
+html {
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+}
+
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
@@ -35,6 +41,146 @@ body {
     color: var(--text-color);
     line-height: 1.6;
     min-height: 100vh;
+}
+
+/* Login Page */
+.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+.login-page.hidden {
+    display: none;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 450px;
+    box-sizing: border-box;
+    padding: 0;
+}
+
+.login-card {
+    background: var(--gradient-card);
+    padding: 3rem;
+    border-radius: 20px;
+    box-shadow: var(--shadow-xl);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    animation: slideDown 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+}
+
+.login-header i {
+    font-size: 4rem;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.login-header h1 {
+    color: var(--primary-color);
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.login-header p {
+    color: var(--text-light);
+    font-size: 1.1rem;
+}
+
+.login-card .form-group {
+    margin-bottom: 1.5rem;
+}
+
+.login-card .form-group label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--dark-color);
+    font-weight: 600;
+}
+
+.login-card .form-group input {
+    width: 100%;
+    padding: 1rem 1.25rem;
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 1.1rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
+    letter-spacing: 0.5px;
+}
+
+.login-card .form-group input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.15);
+    transform: translateY(-2px);
+}
+
+.login-card .form-group small {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    font-style: italic;
+}
+
+.btn-block {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+    justify-content: center;
+}
+
+.login-error {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    background: #ffebee;
+    color: var(--danger-color);
+    border-radius: 8px;
+    border: 1px solid var(--danger-color);
+    display: none;
+    text-align: center;
+    font-weight: 500;
+}
+
+.login-error.show {
+    display: block;
+    animation: shake 0.5s;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+/* Role-based visibility */
+.role-gestionnaire {
+    display: block;
+}
+
+.role-lecteur .role-gestionnaire {
+    display: none !important;
 }
 
 /* Navigation */
@@ -57,6 +203,8 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .nav-logo {
@@ -131,6 +279,9 @@ body {
     max-width: 1200px;
     margin: 2rem auto;
     padding: 0 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .page {
@@ -511,8 +662,12 @@ body {
     border-radius: 16px;
     box-shadow: var(--shadow-md);
     overflow-x: auto;
+    overflow-y: visible;
     border: 1px solid rgba(255, 255, 255, 0.8);
-    overflow: hidden;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 table {
@@ -545,6 +700,26 @@ thead th.sortable .sort-icon {
     margin-left: 0.5rem;
     font-size: 0.75rem;
     opacity: 0.7;
+}
+
+/* Empêcher le débordement horizontal */
+table {
+    width: 100%;
+    table-layout: auto;
+}
+
+@media (max-width: 768px) {
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+    
+    thead, tbody, tr {
+        display: table;
+        width: 100%;
+        table-layout: fixed;
+    }
 }
 
 th, td {
@@ -965,6 +1140,16 @@ tbody tr:hover {
 
 /* Responsive */
 @media (max-width: 768px) {
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        overflow-x: hidden;
+        width: 100%;
+        max-width: 100vw;
+    }
+
     .nav-toggle {
         display: block;
     }
@@ -979,6 +1164,7 @@ tbody tr:hover {
         padding: 1rem;
         display: none;
         box-shadow: var(--shadow-lg);
+        max-width: 100vw;
     }
 
     .nav-menu.active {
@@ -988,45 +1174,186 @@ tbody tr:hover {
     .nav-link {
         width: 100%;
         justify-content: flex-start;
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .main-content {
+        max-width: 100%;
+        padding: 1rem;
+        margin: 1rem auto;
+        width: 100%;
+        overflow-x: hidden;
     }
 
     .page-header {
         flex-direction: column;
         align-items: flex-start;
+        padding: 1.5rem;
+        gap: 1rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .page-header p {
+        font-size: 0.9rem;
     }
 
     .dashboard-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .dashboard-card {
+        padding: 1.5rem;
+    }
+
+    .card-icon {
+        font-size: 2.5rem;
     }
 
     .stats-grid {
         grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .stat-card {
+        padding: 1.5rem;
+    }
+
+    .stat-icon {
+        font-size: 2.5rem;
+    }
+
+    .stat-value {
+        font-size: 1.2rem;
     }
 
     .charts-container {
         grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .chart-card {
+        padding: 1.5rem;
+    }
+
+    .chart-card canvas {
+        max-width: 100%;
+        height: auto !important;
+    }
+
+    .form-container {
+        padding: 1.5rem;
+    }
+
+    .form-group {
+        margin-bottom: 1rem;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        font-size: 16px; /* Évite le zoom sur iOS */
+        padding: 0.75rem;
+    }
+
+    .quick-values {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .btn-quick {
+        flex: 1;
+        min-width: 80px;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .search-filters {
+        padding: 1.5rem;
     }
 
     .filter-group {
         flex-direction: column;
+        gap: 0.75rem;
     }
 
     .filter-group select,
     .filter-group input {
         width: 100%;
+        min-width: 100%;
+    }
+
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        max-width: 100vw;
     }
 
     table {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
+        min-width: 600px; /* Largeur minimale pour le tableau */
+        width: 100%;
     }
 
     th, td {
-        padding: 0.5rem;
+        padding: 0.5rem 0.4rem;
+        white-space: nowrap;
+    }
+
+    th {
+        font-size: 0.75rem;
+    }
+
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.6rem;
+    }
+
+    .btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-sm {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+    }
+
+    .btn-sm i {
+        font-size: 0.8rem;
+    }
+
+    .detail-container {
+        padding: 1.5rem;
+    }
+
+    .detail-item {
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
     }
 
     .modal-content {
         width: 95%;
+        max-width: 95vw;
         padding: 1.5rem;
+        margin: 1rem;
+    }
+
+    .settings-container {
+        gap: 1rem;
+    }
+
+    .settings-section {
+        padding: 1.5rem;
+    }
+
+    .settings-section h3 {
+        font-size: 1.1rem;
     }
 
     .settings-actions {
@@ -1035,6 +1362,134 @@ tbody tr:hover {
 
     .settings-actions .btn {
         width: 100%;
+    }
+
+    .report-container {
+        padding: 1.5rem;
+    }
+
+    .report-controls {
+        flex-direction: column;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .report-controls select,
+    .report-controls button {
+        width: 100%;
+    }
+
+    .report-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+    }
+
+    .drivers-ranking {
+        padding: 1.5rem;
+    }
+
+    .ranking-item {
+        padding: 1rem;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .login-card {
+        padding: 2rem 1.5rem;
+        margin: 1rem;
+    }
+
+    .login-header h1 {
+        font-size: 2rem;
+    }
+
+    .login-header i {
+        font-size: 3rem;
+    }
+
+    .toast {
+        bottom: 1rem;
+        right: 1rem;
+        left: 1rem;
+        max-width: calc(100vw - 2rem);
+        padding: 1rem 1.5rem;
+        font-size: 0.9rem;
+    }
+
+    .page {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+
+    .form-actions {
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+    }
+
+    .result-badge {
+        padding: 1rem;
+        font-size: 1rem;
+    }
+}
+
+/* Corrections supplémentaires pour très petits écrans */
+@media (max-width: 480px) {
+    .main-content {
+        padding: 0.5rem;
+        margin: 0.5rem auto;
+    }
+
+    .page-header {
+        padding: 1rem;
+    }
+
+    .page-header h1 {
+        font-size: 1.25rem;
+    }
+
+    .form-container,
+    .search-filters,
+    .detail-container,
+    .settings-section,
+    .report-container {
+        padding: 1rem;
+    }
+
+    .dashboard-card,
+    .stat-card,
+    .chart-card {
+        padding: 1rem;
+    }
+
+    table {
+        font-size: 0.75rem;
+        min-width: 500px;
+    }
+
+    th, td {
+        padding: 0.4rem 0.3rem;
+    }
+
+    .nav-logo {
+        font-size: 1.2rem;
+    }
+
+    .nav-logo i {
+        font-size: 1.8rem;
+    }
+
+    .login-card {
+        padding: 1.5rem 1rem;
+    }
+
+    .login-header h1 {
+        font-size: 1.75rem;
     }
 }
 
