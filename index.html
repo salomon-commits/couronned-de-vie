@@ -2,14 +2,38 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>Couronne de Vie - Gestion des Recettes de Taxi</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- Page de Login -->
+    <section id="login-page" class="login-page">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-header">
+                    <i class="fas fa-taxi"></i>
+                    <h1>Couronne de Vie</h1>
+                    <p>Gestion des Recettes de Taxi</p>
+                </div>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="accessCode"><i class="fas fa-key"></i> Code d'accès</label>
+                        <input type="password" id="accessCode" name="accessCode" placeholder="Entrez votre code d'accès" required autofocus>
+                        <small>Codes disponibles : couronne01 (Lecteur) ou couronne02 (Gestionnaire)</small>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-sign-in-alt"></i> Se connecter
+                    </button>
+                    <div id="loginError" class="login-error"></div>
+                </form>
+            </div>
+        </div>
+    </section>
+
     <!-- Navigation -->
-    <nav class="navbar">
+    <nav class="navbar" id="navbar" style="display: none;">
         <div class="nav-container">
             <div class="nav-logo">
                 <i class="fas fa-taxi"></i>
@@ -20,19 +44,20 @@
             </button>
             <ul class="nav-menu" id="navMenu">
                 <li><a href="#" data-page="home" class="nav-link active"><i class="fas fa-home"></i> Accueil</a></li>
-                <li><a href="#" data-page="add-recipe" class="nav-link"><i class="fas fa-plus-circle"></i> Ajouter</a></li>
+                <li class="role-gestionnaire"><a href="#" data-page="add-recipe" class="nav-link"><i class="fas fa-plus-circle"></i> Ajouter</a></li>
                 <li><a href="#" data-page="list-recipes" class="nav-link"><i class="fas fa-list"></i> Liste</a></li>
                 <li><a href="#" data-page="statistics" class="nav-link"><i class="fas fa-chart-bar"></i> Statistiques</a></li>
-                <li><a href="#" data-page="taxis" class="nav-link"><i class="fas fa-car"></i> Taxis</a></li>
-                <li><a href="#" data-page="drivers" class="nav-link"><i class="fas fa-user"></i> Chauffeurs</a></li>
+                <li class="role-gestionnaire"><a href="#" data-page="taxis" class="nav-link"><i class="fas fa-car"></i> Taxis</a></li>
+                <li class="role-gestionnaire"><a href="#" data-page="drivers" class="nav-link"><i class="fas fa-user"></i> Chauffeurs</a></li>
                 <li><a href="#" data-page="report" class="nav-link"><i class="fas fa-file-pdf"></i> Rapport</a></li>
-                <li><a href="#" data-page="settings" class="nav-link"><i class="fas fa-cog"></i> Paramètres</a></li>
+                <li class="role-gestionnaire"><a href="#" data-page="settings" class="nav-link"><i class="fas fa-cog"></i> Paramètres</a></li>
+                <li><a href="#" id="logoutBtn" class="nav-link"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
             </ul>
         </div>
     </nav>
 
     <!-- Contenu principal -->
-    <main class="main-content">
+    <main class="main-content" id="mainContent" style="display: none;">
         <!-- Page Accueil -->
         <section id="home" class="page active">
             <div class="page-header">
@@ -40,7 +65,7 @@
                 <p>Bienvenue dans le système de gestion de recettes de taxi - <strong>COURONNE DE VIE</strong></p>
             </div>
             <div class="dashboard-grid">
-                <div class="dashboard-card" data-page="add-recipe">
+                <div class="dashboard-card role-gestionnaire" data-page="add-recipe">
                     <div class="card-icon"><i class="fas fa-plus-circle"></i></div>
                     <h3>Ajouter une Recette</h3>
                     <p>Enregistrer une nouvelle recette quotidienne</p>
@@ -55,12 +80,12 @@
                     <h3>Statistiques</h3>
                     <p>Visualiser les performances et analyses</p>
                 </div>
-                <div class="dashboard-card" data-page="taxis">
+                <div class="dashboard-card role-gestionnaire" data-page="taxis">
                     <div class="card-icon"><i class="fas fa-car"></i></div>
                     <h3>Gestion des Taxis</h3>
                     <p>Gérer les véhicules et leurs informations</p>
                 </div>
-                <div class="dashboard-card" data-page="drivers">
+                <div class="dashboard-card role-gestionnaire" data-page="drivers">
                     <div class="card-icon"><i class="fas fa-user"></i></div>
                     <h3>Gestion des Chauffeurs</h3>
                     <p>Gérer les chauffeurs et leurs données</p>
@@ -74,7 +99,7 @@
         </section>
 
         <!-- Page Ajouter une Recette -->
-        <section id="add-recipe" class="page">
+        <section id="add-recipe" class="page role-gestionnaire">
             <div class="page-header">
                 <h1><i class="fas fa-plus-circle"></i> Ajouter une Recette Quotidienne</h1>
             </div>
@@ -125,7 +150,7 @@
                     <div class="form-group">
                         <div id="resultBadge" class="result-badge" style="display: none;"></div>
                     </div>
-                    <div class="form-actions">
+                    <div class="form-actions role-gestionnaire">
                         <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Enregistrer</button>
                         <button type="reset" class="btn btn-secondary"><i class="fas fa-redo"></i> Réinitialiser</button>
                     </div>
@@ -137,6 +162,11 @@
         <section id="list-recipes" class="page">
             <div class="page-header">
                 <h1><i class="fas fa-list"></i> Liste des Recettes</h1>
+                <div id="dataStatusInfo" class="role-lecteur" style="display: none;">
+                    <small style="color: #666; font-style: italic;">
+                        <i class="fas fa-info-circle"></i> Réception des données désactivée
+                    </small>
+                </div>
             </div>
             <div class="search-filters">
                 <div class="search-group">
@@ -258,7 +288,7 @@
         <section id="taxis" class="page">
             <div class="page-header">
                 <h1><i class="fas fa-car"></i> Gestion des Taxis</h1>
-                <button class="btn btn-primary" id="addTaxiBtn"><i class="fas fa-plus"></i> Ajouter un Taxi</button>
+                <button class="btn btn-primary role-gestionnaire" id="addTaxiBtn"><i class="fas fa-plus"></i> Ajouter un Taxi</button>
             </div>
             <div class="table-container">
                 <table id="taxisTable">
@@ -283,7 +313,7 @@
         <section id="drivers" class="page">
             <div class="page-header">
                 <h1><i class="fas fa-user"></i> Gestion des Chauffeurs</h1>
-                <button class="btn btn-primary" id="addDriverBtn"><i class="fas fa-plus"></i> Ajouter un Chauffeur</button>
+                <button class="btn btn-primary role-gestionnaire" id="addDriverBtn"><i class="fas fa-plus"></i> Ajouter un Chauffeur</button>
             </div>
             <div class="table-container">
                 <table id="driversTable">
@@ -371,6 +401,26 @@
                         </label>
                     </div>
                     <button class="btn btn-primary" id="saveReminders"><i class="fas fa-save"></i> Enregistrer</button>
+                </div>
+                <div class="settings-section">
+                    <h3><i class="fas fa-cloud"></i> Synchronisation Google Sheets</h3>
+                    <div class="form-group">
+                        <p style="color: #666; margin-bottom: 1rem;">
+                            Les données sont automatiquement chargées depuis Google Sheets au démarrage et toutes les 5 minutes.
+                        </p>
+                        <button class="btn btn-primary" id="refreshGoogleSheets">
+                            <i class="fas fa-sync-alt"></i> Rafraîchir depuis Google Sheets
+                        </button>
+                    </div>
+                    <div class="form-group role-gestionnaire">
+                        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                            <input type="checkbox" id="enableDataReception" style="width: auto; cursor: pointer;">
+                            <span>Activer la réception des données pour les lecteurs</span>
+                        </label>
+                        <small style="color: #666; font-size: 0.9rem; display: block; margin-top: 0.5rem;">
+                            Quand désactivé, les lecteurs ne recevront pas les données mises à jour depuis Google Sheets
+                        </small>
+                    </div>
                 </div>
                 <div class="settings-section">
                     <h3><i class="fas fa-database"></i> Gestion des données</h3>
