@@ -1,3 +1,289 @@
+// Gestion des rôles et authentification
+const ACCESS_CODES = {
+    'couronne01': 'lecteur',
+    'couronne02': 'gestionnaire'
+};
+
+let currentRole = null;
+
+// Fonction pour vérifier l'authentification
+function checkAuth() {
+    const role = sessionStorage.getItem('userRole');
+    if (role && (role === 'lecteur' || role === 'gestionnaire')) {
+        currentRole = role;
+        showApplication();
+        return true;
+    }
+    return false;
+}
+
+// Fonction pour afficher l'application
+function showApplication() {
+    document.getElementById('login-page').classList.add('hidden');
+    document.getElementById('navbar').style.display = 'block';
+    document.getElementById('mainContent').style.display = 'block';
+    
+    // Appliquer les restrictions selon le rôle
+    if (currentRole === 'lecteur') {
+        document.body.classList.add('role-lecteur');
+        // Masquer les boutons d'action dans les tableaux
+        setupReadOnlyMode();
+        
+        // Afficher le statut de réception des données
+        const dataStatusInfo = document.getElementById('dataStatusInfo');
+        if (dataStatusInfo) {
+            dataStatusInfo.style.display = !dataReceptionEnabled ? 'block' : 'none';
+        }
+    } else {
+        document.body.classList.remove('role-lecteur');
+    }
+}
+
+// Fonction pour gérer le login
+function handleLogin(code) {
+    const role = ACCESS_CODES[code.toLowerCase()];
+    if (role) {
+        currentRole = role;
+        sessionStorage.setItem('userRole', role);
+        showApplication();
+        showToast(`Connexion réussie - Mode ${role === 'lecteur' ? 'Lecteur' : 'Gestionnaire'}`, 'success');
+        return true;
+    }
+    return false;
+}
+
+// Fonction pour déconnexion
+function handleLogout() {
+    if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+        sessionStorage.removeItem('userRole');
+        currentRole = null;
+        document.body.classList.remove('role-lecteur');
+        document.getElementById('login-page').classList.remove('hidden');
+        document.getElementById('navbar').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'none';
+        document.getElementById('accessCode').value = '';
+        showToast('Déconnexion réussie', 'success');
+    }
+}
+
+// Configuration du mode lecture seule
+function setupReadOnlyMode() {
+    // Les éléments avec la classe role-gestionnaire sont déjà masqués par CSS
+    // On masque aussi les boutons d'action dans les tableaux
+    const actionButtons = document.querySelectorAll('.btn-primary, .btn-danger, .btn-info');
+    actionButtons.forEach(btn => {
+        const parent = btn.closest('tr, .form-actions, .page-header');
+        if (parent && (btn.textContent.includes('Modifier') || 
+                      btn.textContent.includes('Supprimer') || 
+                      btn.textContent.includes('Ajouter') ||
+                      btn.textContent.includes('Enregistrer') ||
+                      btn.textContent.includes('Éditer'))) {
+            if (btn.id !== 'logoutBtn') {
+                btn.style.display = 'none';
+            }
+        }
+    });
+}
+
+// Configuration Google Sheets
+const GOOGLE_SHEETS_CONFIG = {
+    // URLs publiques de vos Google Sheets (format CSV)
+    RECETTES: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRvu0uZMCevHFKFdHK-gXJtZ37GAJDAtjgQUaDXv4Me2_e304OOJ0IrYl-jWq1sWfZdS4pc1b4voeyJ/pub?gid=2086630007&single=true&output=csv',
+    TAXIS: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQRaLAo2z1UY1W343AMtNaNSO1wfG-G2yqFFrxS-93lFBLPmojoUIgFGqZxwTQAMP9vXQaU2WB_L-is/pub?output=csv',
+    CHAUFFEURS: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTtRF6NwSSMUEf2KiYTW_17t7dQk3kXFXnAWQniw95EtNpFjuJpK08OZ1iwMzxXgU0QkadPsWQ6HeNI/pub?output=csv',
+    COMMENTAIRES: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQHcum8peXgKdCxAVQDjyMKbdCF0s7Kgb_e-HS0jgpKEYKv4Gc-5GTp63bT_-nW1JK3dKKMKpGIBHio/pub?output=csv'
+};
+
+// Tableau interne pour stocker toutes les données combinées
+let allData = {
+    recipes: [],
+    taxis: [],
+    drivers: [],
+    comments: []
+};
+
+// Variable pour contrôler la réception des données pour les lecteurs
+let dataReceptionEnabled = false;
+
+// Fonction pour parser un CSV (gère les valeurs entre guillemets)
+function parseCSV(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim());
+    if (lines.length === 0) return [];
+    
+    // Fonction pour parser une ligne CSV en tenant compte des guillemets
+    function parseCSVLine(line) {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            if (char === '"') {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                result.push(current.trim());
+                current = '';
+            } else {
+                current += char;
+            }
+        }
+        result.push(current.trim());
+        return result;
+    }
+    
+    const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, ''));
+    const data = [];
+    
+    for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVLine(lines[i]).map(v => v.replace(/^"|"$/g, ''));
+        if (values.length > 0 && values[0]) {
+            const obj = {};
+            headers.forEach((header, index) => {
+                obj[header] = values[index] || '';
+            });
+            data.push(obj);
+        }
+    }
+    
+    return data;
+}
+
+// Fonction pour récupérer les données depuis Google Sheets
+async function fetchDataFromGoogleSheets() {
+    // Vérifier si le lecteur peut recevoir les données
+    if (currentRole === 'lecteur' && !dataReceptionEnabled) {
+        console.log('Réception des données désactivée pour les lecteurs');
+        // Utiliser les données locales si disponibles
+        await loadFromIndexedDB();
+        // Afficher un message informatif
+        const toast = document.getElementById('toast');
+        if (toast && !toast.classList.contains('show')) {
+            showToast('Mode lecture seule - Les données ne sont pas synchronisées. Contactez le gestionnaire.', 'info');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 5000);
+        }
+        return false;
+    }
+    
+    try {
+        showToast('Chargement des données depuis Google Sheets...', 'info');
+        
+        // Récupérer toutes les données en parallèle
+        const [recipesData, taxisData, driversData, commentsData] = await Promise.all([
+            fetch(GOOGLE_SHEETS_CONFIG.RECETTES).then(r => r.text()).catch(() => ''),
+            fetch(GOOGLE_SHEETS_CONFIG.TAXIS).then(r => r.text()).catch(() => ''),
+            fetch(GOOGLE_SHEETS_CONFIG.CHAUFFEURS).then(r => r.text()).catch(() => ''),
+            fetch(GOOGLE_SHEETS_CONFIG.COMMENTAIRES).then(r => r.text()).catch(() => '')
+        ]);
+        
+        // Parser les CSV
+        allData.recipes = parseCSV(recipesData).map((r, index) => ({
+            id: parseInt(r.ID) || index + 1,
+            date: r.Date || '',
+            matricule: r.Matricule || '',
+            recetteNormale: parseFloat(r['Recette Normale (FCFA)']) || 0,
+            montantVerse: parseFloat(r['Montant Versé (FCFA)']) || 0,
+            chauffeur: r.Chauffeur || '',
+            typeCourse: r['Type de Course'] || 'ville',
+            remarques: r.Remarques || '',
+            timestamp: r.Timestamp ? parseInt(r.Timestamp) : new Date().getTime()
+        }));
+        
+        allData.taxis = parseCSV(taxisData).map((t, index) => ({
+            id: parseInt(t.ID) || index + 1,
+            matricule: t.Matricule || '',
+            marque: t['Marque/Modèle'] || '',
+            proprietaire: t.Propriétaire || 'COURONNE DE VIE'
+        }));
+        
+        allData.drivers = parseCSV(driversData).map((d, index) => ({
+            id: parseInt(d.ID) || index + 1,
+            nom: d.Nom || '',
+            telephone: d.Téléphone || '',
+            taxiAssocie: d['Taxi Associé'] || '',
+            photo: d['Photo URL'] || null
+        }));
+        
+        allData.comments = parseCSV(commentsData).map(c => ({
+            month: c.Mois || '',
+            comments: c.Commentaires || '',
+            dateCreation: c['Date Création'] || ''
+        }));
+        
+        // Synchroniser avec IndexedDB (optionnel, pour fonctionnement hors ligne)
+        await syncToIndexedDB();
+        
+        showToast('Données chargées avec succès depuis Google Sheets!', 'success');
+        return true;
+    } catch (error) {
+        console.error('Erreur lors du chargement depuis Google Sheets:', error);
+        showToast('Erreur lors du chargement. Utilisation des données locales.', 'error');
+        // En cas d'erreur, utiliser les données d'IndexedDB
+        await loadFromIndexedDB();
+        return false;
+    }
+}
+
+// Synchroniser les données vers IndexedDB
+async function syncToIndexedDB() {
+    if (!db) return;
+    
+    try {
+        // Synchroniser les recettes
+        const transaction = db.transaction(['recipes'], 'readwrite');
+        const store = transaction.objectStore('recipes');
+        await store.clear();
+        for (const recipe of allData.recipes) {
+            await new Promise((resolve, reject) => {
+                const request = store.add(recipe);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        // Synchroniser les taxis
+        const taxiTransaction = db.transaction(['taxis'], 'readwrite');
+        const taxiStore = taxiTransaction.objectStore('taxis');
+        await taxiStore.clear();
+        for (const taxi of allData.taxis) {
+            await new Promise((resolve, reject) => {
+                const request = taxiStore.add(taxi);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        // Synchroniser les chauffeurs
+        const driverTransaction = db.transaction(['drivers'], 'readwrite');
+        const driverStore = driverTransaction.objectStore('drivers');
+        await driverStore.clear();
+        for (const driver of allData.drivers) {
+            await new Promise((resolve, reject) => {
+                const request = driverStore.add(driver);
+                request.onsuccess = () => resolve();
+                request.onerror = () => reject(request.error);
+            });
+        }
+    } catch (error) {
+        console.error('Erreur lors de la synchronisation:', error);
+    }
+}
+
+// Charger depuis IndexedDB en cas d'erreur
+async function loadFromIndexedDB() {
+    if (!db) return;
+    
+    try {
+        allData.recipes = await getAllRecipes();
+        allData.taxis = await getAllTaxis();
+        allData.drivers = await getAllDrivers();
+    } catch (error) {
+        console.error('Erreur lors du chargement depuis IndexedDB:', error);
+    }
+}
+
 // Base de données IndexedDB
 let db;
 const DB_NAME = 'TaxiRecipesDB';
@@ -60,8 +346,16 @@ function initNavigation() {
     navLinks.forEach(link => {
         link.addEventListener('click', (e) => {
             e.preventDefault();
+            
+            // Ne pas naviguer si c'est le bouton de déconnexion
+            if (link.id === 'logoutBtn') {
+                return;
+            }
+            
             const targetPage = link.getAttribute('data-page');
-            showPage(targetPage);
+            if (targetPage) {
+                showPage(targetPage);
+            }
             
             // Fermer le menu mobile
             navMenu.classList.remove('active');
@@ -85,6 +379,12 @@ function initNavigation() {
 }
 
 function showPage(pageId) {
+    // Vérifier si la page est accessible selon le rôle
+    if (currentRole === 'lecteur' && (pageId === 'add-recipe' || pageId === 'taxis' || pageId === 'drivers' || pageId === 'settings')) {
+        showToast('Accès refusé - Mode lecture seule', 'error');
+        return;
+    }
+    
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
     
@@ -223,7 +523,22 @@ async function handleAddRecipe(e) {
 
 // CRUD Recettes
 async function addRecipe(recipe) {
+    // Ajouter aussi dans allData pour la gestionnaire
+    if (!recipe.id) {
+        recipe.id = allData.recipes.length > 0 
+            ? Math.max(...allData.recipes.map(r => r.id)) + 1 
+            : 1;
+    }
+    
+    // Ajouter dans allData
+    allData.recipes.push(recipe);
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(recipe.id);
+            return;
+        }
         const transaction = db.transaction(['recipes'], 'readwrite');
         const store = transaction.objectStore('recipes');
         const request = store.add(recipe);
@@ -234,7 +549,17 @@ async function addRecipe(recipe) {
 }
 
 async function getAllRecipes() {
+    // Utiliser les données depuis Google Sheets si disponibles
+    if (allData.recipes && allData.recipes.length > 0) {
+        return allData.recipes;
+    }
+    
+    // Sinon, utiliser IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve([]);
+            return;
+        }
         const transaction = db.transaction(['recipes'], 'readonly');
         const store = transaction.objectStore('recipes');
         const request = store.getAll();
@@ -256,7 +581,19 @@ async function getRecipe(id) {
 }
 
 async function updateRecipe(id, recipe) {
+    // Mettre à jour dans allData
+    const index = allData.recipes.findIndex(r => r.id === id);
+    if (index !== -1) {
+        recipe.id = id;
+        allData.recipes[index] = recipe;
+    }
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(id);
+            return;
+        }
         const transaction = db.transaction(['recipes'], 'readwrite');
         const store = transaction.objectStore('recipes');
         recipe.id = id;
@@ -268,7 +605,15 @@ async function updateRecipe(id, recipe) {
 }
 
 async function deleteRecipe(id) {
+    // Supprimer de allData
+    allData.recipes = allData.recipes.filter(r => r.id !== id);
+    
+    // Supprimer de IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve();
+            return;
+        }
         const transaction = db.transaction(['recipes'], 'readwrite');
         const store = transaction.objectStore('recipes');
         const request = store.delete(id);
@@ -345,6 +690,23 @@ function displayRecipes(recipes, sorted = false) {
         sortedRecipes = recipes;
     }
 
+    const isReadOnly = currentRole === 'lecteur';
+    const actionButtons = isReadOnly ? `
+                    <button class="btn btn-sm btn-info" onclick="showRecipeDetail(${recipe.id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+    ` : `
+                    <button class="btn btn-sm btn-info" onclick="showRecipeDetail(${recipe.id})">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="editRecipe(${recipe.id})">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-sm btn-danger" onclick="confirmDeleteRecipe(${recipe.id})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+    `;
+
     tbody.innerHTML = sortedRecipes.map(recipe => {
         const difference = recipe.montantVerse - recipe.recetteNormale;
         let badgeClass = 'correct';
@@ -369,15 +731,7 @@ function displayRecipes(recipes, sorted = false) {
                 <td><span class="badge ${badgeClass}">${badgeText}</span></td>
                 <td>${recipe.chauffeur}</td>
                 <td>
-                    <button class="btn btn-sm btn-info" onclick="showRecipeDetail(${recipe.id})">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-sm btn-primary" onclick="editRecipe(${recipe.id})">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn btn-sm btn-danger" onclick="confirmDeleteRecipe(${recipe.id})">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    ${actionButtons}
                 </td>
             </tr>
         `;
@@ -548,12 +902,14 @@ async function showRecipeDetail(id) {
             <p>${recipe.remarques || 'Aucune remarque'}</p>
         </div>
         <div class="form-actions">
+            ${currentRole === 'gestionnaire' ? `
             <button class="btn btn-primary" onclick="editRecipe(${recipe.id})">
                 <i class="fas fa-edit"></i> Modifier
             </button>
             <button class="btn btn-danger" onclick="confirmDeleteRecipe(${recipe.id})">
                 <i class="fas fa-trash"></i> Supprimer
             </button>
+            ` : ''}
         </div>
     `;
 
@@ -620,7 +976,17 @@ async function confirmDeleteRecipe(id) {
 
 // CRUD Taxis
 async function getAllTaxis() {
+    // Utiliser les données depuis Google Sheets si disponibles
+    if (allData.taxis && allData.taxis.length > 0) {
+        return allData.taxis;
+    }
+    
+    // Sinon, utiliser IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve([]);
+            return;
+        }
         const transaction = db.transaction(['taxis'], 'readonly');
         const store = transaction.objectStore('taxis');
         const request = store.getAll();
@@ -631,7 +997,20 @@ async function getAllTaxis() {
 }
 
 async function addTaxi(taxi) {
+    // Ajouter dans allData
+    if (!taxi.id) {
+        taxi.id = allData.taxis.length > 0 
+            ? Math.max(...allData.taxis.map(t => t.id)) + 1 
+            : 1;
+    }
+    allData.taxis.push(taxi);
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(taxi.id);
+            return;
+        }
         const transaction = db.transaction(['taxis'], 'readwrite');
         const store = transaction.objectStore('taxis');
         const request = store.add(taxi);
@@ -642,7 +1021,19 @@ async function addTaxi(taxi) {
 }
 
 async function updateTaxi(id, taxi) {
+    // Mettre à jour dans allData
+    const index = allData.taxis.findIndex(t => t.id === id);
+    if (index !== -1) {
+        taxi.id = id;
+        allData.taxis[index] = taxi;
+    }
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(id);
+            return;
+        }
         const transaction = db.transaction(['taxis'], 'readwrite');
         const store = transaction.objectStore('taxis');
         taxi.id = id;
@@ -654,7 +1045,15 @@ async function updateTaxi(id, taxi) {
 }
 
 async function deleteTaxi(id) {
+    // Supprimer de allData
+    allData.taxis = allData.taxis.filter(t => t.id !== id);
+    
+    // Supprimer de IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve();
+            return;
+        }
         const transaction = db.transaction(['taxis'], 'readwrite');
         const store = transaction.objectStore('taxis');
         const request = store.delete(id);
@@ -678,18 +1077,23 @@ function displayTaxis(taxis) {
         return;
     }
 
-    tbody.innerHTML = taxis.map(taxi => `
-        <tr>
-            <td>${taxi.matricule}</td>
-            <td>${taxi.marque || 'Non spécifié'}</td>
-            <td>${taxi.proprietaire}</td>
-            <td>
+    const isReadOnly = currentRole === 'lecteur';
+    const taxiActions = isReadOnly ? '' : `
                 <button class="btn btn-sm btn-primary" onclick="editTaxi(${taxi.id})">
                     <i class="fas fa-edit"></i>
                 </button>
                 <button class="btn btn-sm btn-danger" onclick="confirmDeleteTaxi(${taxi.id})">
                     <i class="fas fa-trash"></i>
                 </button>
+    `;
+    
+    tbody.innerHTML = taxis.map(taxi => `
+        <tr>
+            <td>${taxi.matricule}</td>
+            <td>${taxi.marque || 'Non spécifié'}</td>
+            <td>${taxi.proprietaire}</td>
+            <td>
+                ${taxiActions}
             </td>
         </tr>
     `).join('');
@@ -806,7 +1210,17 @@ async function confirmDeleteTaxi(id) {
 
 // CRUD Chauffeurs
 async function getAllDrivers() {
+    // Utiliser les données depuis Google Sheets si disponibles
+    if (allData.drivers && allData.drivers.length > 0) {
+        return allData.drivers;
+    }
+    
+    // Sinon, utiliser IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve([]);
+            return;
+        }
         const transaction = db.transaction(['drivers'], 'readonly');
         const store = transaction.objectStore('drivers');
         const request = store.getAll();
@@ -817,7 +1231,20 @@ async function getAllDrivers() {
 }
 
 async function addDriver(driver) {
+    // Ajouter dans allData
+    if (!driver.id) {
+        driver.id = allData.drivers.length > 0 
+            ? Math.max(...allData.drivers.map(d => d.id)) + 1 
+            : 1;
+    }
+    allData.drivers.push(driver);
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(driver.id);
+            return;
+        }
         const transaction = db.transaction(['drivers'], 'readwrite');
         const store = transaction.objectStore('drivers');
         const request = store.add(driver);
@@ -828,7 +1255,19 @@ async function addDriver(driver) {
 }
 
 async function updateDriver(id, driver) {
+    // Mettre à jour dans allData
+    const index = allData.drivers.findIndex(d => d.id === id);
+    if (index !== -1) {
+        driver.id = id;
+        allData.drivers[index] = driver;
+    }
+    
+    // Sauvegarder dans IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve(id);
+            return;
+        }
         const transaction = db.transaction(['drivers'], 'readwrite');
         const store = transaction.objectStore('drivers');
         driver.id = id;
@@ -840,7 +1279,15 @@ async function updateDriver(id, driver) {
 }
 
 async function deleteDriver(id) {
+    // Supprimer de allData
+    allData.drivers = allData.drivers.filter(d => d.id !== id);
+    
+    // Supprimer de IndexedDB
     return new Promise((resolve, reject) => {
+        if (!db) {
+            resolve();
+            return;
+        }
         const transaction = db.transaction(['drivers'], 'readwrite');
         const store = transaction.objectStore('drivers');
         const request = store.delete(id);
@@ -864,7 +1311,26 @@ function displayDrivers(drivers) {
         return;
     }
 
-    tbody.innerHTML = drivers.map(driver => `
+    const isReadOnly = currentRole === 'lecteur';
+    
+    tbody.innerHTML = drivers.map(driver => {
+        const driverActions = isReadOnly ? `
+                <button class="btn btn-sm btn-info" onclick="showDriverHistory('${driver.nom}')">
+                    <i class="fas fa-history"></i>
+                </button>
+        ` : `
+                <button class="btn btn-sm btn-info" onclick="showDriverHistory('${driver.nom}')">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="editDriver(${driver.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="confirmDeleteDriver(${driver.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+        `;
+        
+        return `
         <tr>
             <td>
                 ${driver.photo 
@@ -876,18 +1342,11 @@ function displayDrivers(drivers) {
             <td>${driver.telephone}</td>
             <td>${driver.taxiAssocie || 'Non associé'}</td>
             <td>
-                <button class="btn btn-sm btn-info" onclick="showDriverHistory('${driver.nom}')">
-                    <i class="fas fa-history"></i>
-                </button>
-                <button class="btn btn-sm btn-primary" onclick="editDriver(${driver.id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-danger" onclick="confirmDeleteDriver(${driver.id})">
-                    <i class="fas fa-trash"></i>
-                </button>
+                ${driverActions}
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function loadDriversDropdown(selectId) {
@@ -1249,6 +1708,7 @@ async function loadSettings() {
     const defaults = await getSetting('defaultValues') || { value1: 9000, value2: 12000, value3: 15000 };
     const colors = await getSetting('colors') || { primary: '#4CAF50', secondary: '#2196F3' };
     const reminders = await getSetting('reminders') || { time: '18:00', enabled: true };
+    const receptionEnabled = await getSetting('dataReceptionEnabled') || false;
 
     document.getElementById('defaultValue1').value = defaults.value1;
     document.getElementById('defaultValue2').value = defaults.value2;
@@ -1257,6 +1717,13 @@ async function loadSettings() {
     document.getElementById('secondaryColor').value = colors.secondary;
     document.getElementById('reminderTime').value = reminders.time || '18:00';
     document.getElementById('enableReminders').checked = reminders.enabled !== false;
+    
+    // Charger l'état de la réception des données
+    const enableDataReception = document.getElementById('enableDataReception');
+    if (enableDataReception) {
+        enableDataReception.checked = receptionEnabled;
+        dataReceptionEnabled = receptionEnabled;
+    }
 
     // Handlers
     document.getElementById('saveDefaults').addEventListener('click', saveDefaults);
@@ -1267,6 +1734,39 @@ async function loadSettings() {
     document.getElementById('importJSON').addEventListener('change', importJSON);
     document.getElementById('importCSV').addEventListener('change', importCSV);
     document.getElementById('clearData').addEventListener('click', confirmClearData);
+    
+    // Bouton de contrôle de réception des données (gestionnaire uniquement)
+    if (enableDataReception) {
+        enableDataReception.addEventListener('change', async (e) => {
+            dataReceptionEnabled = e.target.checked;
+            await setSetting('dataReceptionEnabled', dataReceptionEnabled);
+            showToast(
+                dataReceptionEnabled 
+                    ? 'Réception activée - Les lecteurs recevront les données mises à jour' 
+                    : 'Réception désactivée - Les lecteurs ne recevront pas les données',
+                'success'
+            );
+        });
+    }
+    
+    // Bouton de rafraîchissement Google Sheets
+    const refreshBtn = document.getElementById('refreshGoogleSheets');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', async () => {
+            refreshBtn.disabled = true;
+            refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Chargement...';
+            await fetchDataFromGoogleSheets();
+            refreshBtn.disabled = false;
+            refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Rafraîchir depuis Google Sheets';
+            
+            // Recharger la page active
+            const activePage = document.querySelector('.page.active');
+            if (activePage) {
+                const pageId = activePage.id;
+                showPage(pageId);
+            }
+        });
+    }
 }
 
 function loadDefaultValues() {
@@ -1798,15 +2298,67 @@ async function exportPDF(monthStr) {
     showToast('Rapport PDF généré!', 'success');
 }
 
+// Gestion du formulaire de login
+function initLogin() {
+    const loginForm = document.getElementById('loginForm');
+    const accessCodeInput = document.getElementById('accessCode');
+    const loginError = document.getElementById('loginError');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const code = accessCodeInput.value.trim();
+            
+            loginError.classList.remove('show');
+            
+            if (handleLogin(code)) {
+                // Succès - l'application est déjà affichée par handleLogin
+            } else {
+                loginError.textContent = 'Code d\'accès incorrect. Veuillez réessayer.';
+                loginError.classList.add('show');
+                accessCodeInput.value = '';
+                accessCodeInput.focus();
+            }
+        });
+    }
+}
+
 // Initialisation
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // Initialiser le login
+        initLogin();
+        
+        // Vérifier si l'utilisateur est déjà connecté
+        if (!checkAuth()) {
+            // Pas connecté, afficher la page de login
+            return;
+        }
+        
+        // Utilisateur connecté, initialiser l'application
         await initDB();
+        
+        // Charger l'état de réception des données
+        const receptionEnabled = await getSetting('dataReceptionEnabled') || false;
+        dataReceptionEnabled = receptionEnabled;
+        
+        // Charger les données depuis Google Sheets
+        await fetchDataFromGoogleSheets();
+        
         initNavigation();
         initTaxiModal();
         initDriverModal();
         loadDefaultValues();
         showPage('home');
+        
+        // Gestionnaire de déconnexion
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                handleLogout();
+            });
+        }
         
         // Charger et configurer les rappels
         const reminders = await getSetting('reminders') || { time: '18:00', enabled: true };
@@ -1818,6 +2370,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
+        
+        // Rafraîchir les données toutes les 5 minutes
+        setInterval(async () => {
+            await fetchDataFromGoogleSheets();
+            // Recharger la page active si nécessaire
+            const activePage = document.querySelector('.page.active');
+            if (activePage) {
+                const pageId = activePage.id;
+                showPage(pageId);
+            }
+        }, 300000); // 5 minutes
     } catch (error) {
         console.error('Erreur d\'initialisation:', error);
         showToast('Erreur d\'initialisation de l\'application', 'error');
