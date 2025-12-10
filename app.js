@@ -168,6 +168,10 @@ function handleLogin(code = null, directRole = null) {
         fetchDataFromSupabase()
             .then(() => {
                 console.log('✅ Données chargées après connexion');
+                // Mettre à jour le dashboard après le chargement
+                setTimeout(() => {
+                    loadDashboardData();
+                }, 500);
             })
             .catch((error) => {
                 console.error('❌ Échec du chargement des données après connexion (non bloquant):', error);
@@ -545,6 +549,13 @@ async function fetchDataFromSupabase() {
         }
         
         showToast('Données chargées avec succès depuis Supabase!', 'success');
+        
+        // ✅ Mettre à jour le dashboard si on est sur la page dashboard
+        const activePage = document.querySelector('.view-section.active, .page.active');
+        if (activePage && (activePage.id === 'view-dashboard' || activePage.getAttribute('data-page-id') === 'home')) {
+            loadDashboardData();
+        }
+        
         return true;
     } catch (error) {
         console.error('Erreur lors du chargement depuis Supabase:', error);
@@ -908,6 +919,10 @@ function showPage(pageId) {
 
     // Charger les données spécifiques à chaque page
     switch(pageId) {
+        case 'home':
+        case 'dashboard':
+            loadDashboardData();
+            break;
         case 'add-recipe':
             loadAddRecipePage();
             break;
@@ -2642,7 +2657,19 @@ async function loadStatistics() {
     displayDriversRanking(recipes);
 }
 
-function calculateStats(recipes) {
+// Fonction pour charger les données du dashboard
+async function loadDashboardData() {
+    try {
+        const recipes = await getAllRecipes();
+        const taxis = await getAllTaxis();
+        calculateStats(recipes, taxis);
+        renderQuickActionCards();
+    } catch (error) {
+        console.error('Erreur lors du chargement des données du dashboard:', error);
+    }
+}
+
+function calculateStats(recipes, taxis = []) {
     const today = new Date().toISOString().split('T')[0];
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
@@ -2653,34 +2680,127 @@ function calculateStats(recipes) {
         return recipeDate.getMonth() === currentMonth && recipeDate.getFullYear() === currentYear;
     });
 
-    const todayTotal = todayRecipes.reduce((sum, r) => sum + r.montantVerse, 0);
-    const monthTotal = monthRecipes.reduce((sum, r) => sum + r.montantVerse, 0);
+    const todayTotal = todayRecipes.reduce((sum, r) => sum + (r.montantVerse || 0), 0);
+    const monthTotal = monthRecipes.reduce((sum, r) => sum + (r.montantVerse || 0), 0);
 
     let totalDeficit = 0;
     let totalSurplus = 0;
 
     recipes.forEach(recipe => {
-        const diff = recipe.montantVerse - recipe.recetteNormale;
+        const diff = (recipe.montantVerse || 0) - (recipe.recetteNormale || 0);
         if (diff < 0) totalDeficit += Math.abs(diff);
         else if (diff > 0) totalSurplus += diff;
     });
+
+    // Calculer les taxis actifs (taxis qui ont des recettes aujourd'hui)
+    const activeTaxisToday = new Set(todayRecipes.map(r => r.matricule).filter(Boolean));
+    const totalTaxis = taxis.length;
 
     const todayTotalEl = document.getElementById('todayTotal');
     const monthTotalEl = document.getElementById('monthTotal');
     const totalDeficitEl = document.getElementById('totalDeficit');
     const totalSurplusEl = document.getElementById('totalSurplus');
+    const activeTaxisEl = document.getElementById('activeTaxis');
     
     if (todayTotalEl) {
-        todayTotalEl.textContent = todayTotal.toLocaleString() + ' FCFA';
+        todayTotalEl.textContent = todayTotal.toLocaleString('fr-FR') + ' FCFA';
     }
     if (monthTotalEl) {
-        monthTotalEl.textContent = monthTotal.toLocaleString() + ' FCFA';
+        monthTotalEl.textContent = monthTotal.toLocaleString('fr-FR') + ' FCFA';
     }
     if (totalDeficitEl) {
-        totalDeficitEl.textContent = totalDeficit.toLocaleString() + ' FCFA';
+        totalDeficitEl.textContent = totalDeficit.toLocaleString('fr-FR') + ' FCFA';
     }
     if (totalSurplusEl) {
-        totalSurplusEl.textContent = totalSurplus.toLocaleString() + ' FCFA';
+        totalSurplusEl.textContent = totalSurplus.toLocaleString('fr-FR') + ' FCFA';
+    }
+    if (activeTaxisEl) {
+        activeTaxisEl.textContent = `${activeTaxisToday.size} / ${totalTaxis}`;
+    }
+}
+
+// Fonction pour afficher les cartes d'action rapide selon le rôle
+function renderQuickActionCards() {
+    const quickActionsContainer = document.getElementById('quickActionsContainer');
+    if (!quickActionsContainer) return;
+
+    // Vider le conteneur
+    quickActionsContainer.innerHTML = '';
+
+    if (currentRole === 'lecteur') {
+        // Cartes d'action pour les lecteurs
+        quickActionsContainer.innerHTML = `
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('list-recipes')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                        <i class="fa-solid fa-list text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Voir les Recettes</h3>
+                        <p class="text-sm text-slate-500">Consulter toutes les recettes enregistrées</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('statistics')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-purple-50 text-purple-600 rounded-lg">
+                        <i class="fa-solid fa-chart-pie text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Statistiques</h3>
+                        <p class="text-sm text-slate-500">Analyser les données et graphiques</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else if (currentRole === 'gestionnaire') {
+        // Cartes d'action pour les gestionnaires
+        quickActionsContainer.innerHTML = `
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('add-recipe')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-green-50 text-green-600 rounded-lg">
+                        <i class="fa-solid fa-circle-plus text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Ajouter une Recette</h3>
+                        <p class="text-sm text-slate-500">Enregistrer une nouvelle recette de taxi</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('list-recipes')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                        <i class="fa-solid fa-list text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Liste des Recettes</h3>
+                        <p class="text-sm text-slate-500">Voir et gérer toutes les recettes</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('taxis')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-orange-50 text-orange-600 rounded-lg">
+                        <i class="fa-solid fa-taxi text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Gérer les Taxis</h3>
+                        <p class="text-sm text-slate-500">Ajouter ou modifier les taxis</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-all" onclick="showPage('report')">
+                <div class="flex items-center gap-4">
+                    <div class="p-3 bg-red-50 text-red-600 rounded-lg">
+                        <i class="fa-solid fa-file-pdf text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800">Générer un Rapport</h3>
+                        <p class="text-sm text-slate-500">Créer un rapport mensuel PDF</p>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 }
 
@@ -4423,6 +4543,9 @@ async function refreshAllData() {
             };
             const mappedPageId = pageMapping[pageId] || pageId;
             showPage(mappedPageId);
+        } else {
+            // Si aucune page active, charger le dashboard par défaut
+            loadDashboardData();
         }
         
         showToast('Données actualisées avec succès!', 'success');
@@ -4555,6 +4678,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
                 }
                 console.log('✅ Données chargées en arrière-plan depuis Supabase');
+                // Mettre à jour le dashboard après le chargement
+                setTimeout(() => {
+                    loadDashboardData();
+                }, 500);
             })
             .catch((error) => {
                 // Gérer l'échec du chargement sans bloquer l'UI
