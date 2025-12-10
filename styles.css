@@ -1,0 +1,1491 @@
+/* 
+   ==========================================================================
+   STYLES GLOBAUX & NAVIGATION
+   ==========================================================================
+*/
+
+/* 
+   1. LOGIQUE D'AFFICHAGE DES VUES 
+   --------------------------------------------------------------------------
+   Support à la fois du système radio hack et du système app.js (.page)
+*/
+
+/* Par défaut, toutes les sections de vue sont cachées */
+.view-section,
+.page {
+    display: none !important;
+    /* Animation douce à l'apparition */
+    animation: slideUpFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* IMPORTANT: S'assurer que les pages sont vraiment masquées */
+#mainApp .view-section:not(.active),
+#mainApp .page:not(.active) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Affichage des pages actives (système app.js) */
+.page.active,
+.view-section.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* Permettre l'affichage explicite via style inline - priorité maximale */
+.view-section[style*="display: block"],
+.page[style*="display: block"] {
+    display: block !important;
+}
+
+/* Affichage conditionnel basé sur l'input coché (système radio hack) */
+/* IMPORTANT: Masquer toutes les pages par défaut, puis afficher seulement celle sélectionnée */
+#nav-dashboard:checked ~ div #view-dashboard {
+    display: block !important;
+}
+#nav-add:checked ~ div #view-add {
+    display: block !important;
+}
+#nav-list:checked ~ div #view-list {
+    display: block !important;
+}
+#nav-stats:checked ~ div #view-stats {
+    display: block !important;
+}
+#nav-taxis:checked ~ div #view-taxis {
+    display: block !important;
+}
+#nav-drivers:checked ~ div #view-drivers {
+    display: block !important;
+}
+#nav-report:checked ~ div #view-report {
+    display: block !important;
+}
+#nav-ai:checked ~ div #view-ai {
+    display: block !important;
+}
+#nav-settings:checked ~ div #view-settings {
+    display: block !important;
+}
+
+/* Masquer toutes les autres pages quand une est sélectionnée (radio hack) */
+/* Quand dashboard est sélectionné, masquer toutes les autres */
+#nav-dashboard:checked ~ div #view-add,
+#nav-dashboard:checked ~ div #view-list,
+#nav-dashboard:checked ~ div #view-stats,
+#nav-dashboard:checked ~ div #view-taxis,
+#nav-dashboard:checked ~ div #view-drivers,
+#nav-dashboard:checked ~ div #view-report,
+#nav-dashboard:checked ~ div #view-ai,
+#nav-dashboard:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand add est sélectionné, masquer toutes les autres */
+#nav-add:checked ~ div #view-dashboard,
+#nav-add:checked ~ div #view-list,
+#nav-add:checked ~ div #view-stats,
+#nav-add:checked ~ div #view-taxis,
+#nav-add:checked ~ div #view-drivers,
+#nav-add:checked ~ div #view-report,
+#nav-add:checked ~ div #view-ai,
+#nav-add:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand list est sélectionné, masquer toutes les autres */
+#nav-list:checked ~ div #view-dashboard,
+#nav-list:checked ~ div #view-add,
+#nav-list:checked ~ div #view-stats,
+#nav-list:checked ~ div #view-taxis,
+#nav-list:checked ~ div #view-drivers,
+#nav-list:checked ~ div #view-report,
+#nav-list:checked ~ div #view-ai,
+#nav-list:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand stats est sélectionné, masquer toutes les autres */
+#nav-stats:checked ~ div #view-dashboard,
+#nav-stats:checked ~ div #view-add,
+#nav-stats:checked ~ div #view-list,
+#nav-stats:checked ~ div #view-taxis,
+#nav-stats:checked ~ div #view-drivers,
+#nav-stats:checked ~ div #view-report,
+#nav-stats:checked ~ div #view-ai,
+#nav-stats:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand taxis est sélectionné, masquer toutes les autres */
+#nav-taxis:checked ~ div #view-dashboard,
+#nav-taxis:checked ~ div #view-add,
+#nav-taxis:checked ~ div #view-list,
+#nav-taxis:checked ~ div #view-stats,
+#nav-taxis:checked ~ div #view-drivers,
+#nav-taxis:checked ~ div #view-report,
+#nav-taxis:checked ~ div #view-ai,
+#nav-taxis:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand drivers est sélectionné, masquer toutes les autres */
+#nav-drivers:checked ~ div #view-dashboard,
+#nav-drivers:checked ~ div #view-add,
+#nav-drivers:checked ~ div #view-list,
+#nav-drivers:checked ~ div #view-stats,
+#nav-drivers:checked ~ div #view-taxis,
+#nav-drivers:checked ~ div #view-report,
+#nav-drivers:checked ~ div #view-ai,
+#nav-drivers:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand report est sélectionné, masquer toutes les autres */
+#nav-report:checked ~ div #view-dashboard,
+#nav-report:checked ~ div #view-add,
+#nav-report:checked ~ div #view-list,
+#nav-report:checked ~ div #view-stats,
+#nav-report:checked ~ div #view-taxis,
+#nav-report:checked ~ div #view-drivers,
+#nav-report:checked ~ div #view-ai,
+#nav-report:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand ai est sélectionné, masquer toutes les autres */
+#nav-ai:checked ~ div #view-dashboard,
+#nav-ai:checked ~ div #view-add,
+#nav-ai:checked ~ div #view-list,
+#nav-ai:checked ~ div #view-stats,
+#nav-ai:checked ~ div #view-taxis,
+#nav-ai:checked ~ div #view-drivers,
+#nav-ai:checked ~ div #view-report,
+#nav-ai:checked ~ div #view-settings {
+    display: none !important;
+}
+/* Quand settings est sélectionné, masquer toutes les autres */
+#nav-settings:checked ~ div #view-dashboard,
+#nav-settings:checked ~ div #view-add,
+#nav-settings:checked ~ div #view-list,
+#nav-settings:checked ~ div #view-stats,
+#nav-settings:checked ~ div #view-taxis,
+#nav-settings:checked ~ div #view-drivers,
+#nav-settings:checked ~ div #view-report,
+#nav-settings:checked ~ div #view-ai {
+    display: none !important;
+}
+
+/* 
+   2. ÉTATS ACTIFS DU MENU LATÉRAL
+   --------------------------------------------------------------------------
+   On change le style du <label> dans la sidebar quand l'input correspondant est coché.
+*/
+
+#nav-dashboard:checked ~ div aside label[for="nav-dashboard"],
+#nav-add:checked ~ div aside label[for="nav-add"],
+#nav-list:checked ~ div aside label[for="nav-list"],
+#nav-stats:checked ~ div aside label[for="nav-stats"],
+#nav-taxis:checked ~ div aside label[for="nav-taxis"],
+#nav-drivers:checked ~ div aside label[for="nav-drivers"],
+#nav-report:checked ~ div aside label[for="nav-report"],
+#nav-ai:checked ~ div aside label[for="nav-ai"],
+#nav-settings:checked ~ div aside label[for="nav-settings"] {
+    background-color: rgba(59, 130, 246, 0.15); /* Fond bleu transparent */
+    color: #ffffff; /* Texte blanc */
+    border-right: 3px solid #3b82f6; /* Bordure bleue à droite */
+    font-weight: 600;
+}
+
+/* Ajout d'une petite lueur sur l'icône active */
+#nav-dashboard:checked ~ div aside label[for="nav-dashboard"] i,
+#nav-add:checked ~ div aside label[for="nav-add"] i,
+#nav-list:checked ~ div aside label[for="nav-list"] i,
+#nav-stats:checked ~ div aside label[for="nav-stats"] i,
+#nav-taxis:checked ~ div aside label[for="nav-taxis"] i,
+#nav-drivers:checked ~ div aside label[for="nav-drivers"] i,
+#nav-report:checked ~ div aside label[for="nav-report"] i,
+#nav-ai:checked ~ div aside label[for="nav-ai"] i,
+#nav-settings:checked ~ div aside label[for="nav-settings"] i {
+    color: #60a5fa; /* Bleu plus clair pour l'icône */
+}
+
+/* 
+   3. ANIMATIONS & TRANSITIONS
+   --------------------------------------------------------------------------
+*/
+
+@keyframes slideUpFade {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Transition douce sur les éléments interactifs */
+.nav-item {
+    transition: all 0.2s ease;
+}
+
+/* Masquer le contenu du dashboard sur toutes les autres pages */
+.view-section:not(#view-dashboard) .dashboard-only-content,
+.page:not([data-page-id="home"]):not(#home) .dashboard-only-content {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Afficher le contenu du dashboard uniquement sur le dashboard */
+#view-dashboard .dashboard-only-content,
+[data-page-id="home"] .dashboard-only-content,
+#home .dashboard-only-content {
+    display: grid !important;
+    visibility: visible !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+/* 
+   4. PERSONNALISATION DES SCROLLBARS
+   --------------------------------------------------------------------------
+   Pour un look plus propre sur Chrome/Edge/Safari
+*/
+
+/* Scrollbar globale */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1; /* Gris clair */
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8; /* Gris moyen au survol */
+}
+
+/* Sidebar spécifique (plus discret) */
+aside nav::-webkit-scrollbar {
+    width: 4px;
+}
+aside nav::-webkit-scrollbar-thumb {
+    background: #334155; /* Slate-700 */
+}
+
+/* 
+   5. AJUSTEMENTS SPÉCIFIQUES
+   --------------------------------------------------------------------------
+*/
+
+/* Empêcher la sélection de texte sur les éléments de menu */
+.nav-item {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Input number sans les flèches (spinners) */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0; 
+}
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* 
+   6. STYLES POUR APP.JS - ÉLÉMENTS DYNAMIQUES
+   --------------------------------------------------------------------------
+*/
+
+/* Badge de résultat (déficit/surplus/correct) */
+.result-badge {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 600;
+    animation: fadeIn 0.3s ease-in;
+}
+
+.result-badge.deficit {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.result-badge.surplus {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.result-badge.correct {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+/* Boutons rapides pour les montants */
+.btn-quick {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.btn-quick:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.btn-quick.active {
+    background-color: #3b82f6 !important;
+    color: white !important;
+    border-color: #3b82f6 !important;
+}
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    color: white;
+    font-weight: 500;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    z-index: 10000;
+    transform: translateX(400px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    max-width: 400px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.toast.show {
+    transform: translateX(0);
+    opacity: 1;
+}
+
+.toast.success {
+    background-color: #10b981;
+}
+
+.toast.error {
+    background-color: #ef4444;
+}
+
+.toast.info {
+    background-color: #3b82f6;
+}
+
+.toast.warning {
+    background-color: #f59e0b;
+}
+
+/* Modals */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease;
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: white;
+    margin: auto;
+    padding: 2rem;
+    border-radius: 1rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    animation: slideUp 0.3s ease;
+}
+
+.modal .close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: color 0.2s;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.25rem;
+}
+
+.modal .close:hover {
+    color: #ef4444;
+    background-color: #fee2e2;
+}
+
+/* Tableaux améliorés */
+.table-container {
+    overflow-x: auto;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table thead {
+    background-color: #f8fafc;
+}
+
+table th {
+    padding: 1rem;
+    text-align: left;
+    font-weight: 600;
+    color: #475569;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+table td {
+    padding: 1rem;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+table tbody tr {
+    transition: background-color 0.2s;
+}
+
+table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* États vides */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Badges de statut */
+.badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge.deficit {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.badge.surplus {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.badge.correct {
+    background-color: #dbeafe;
+    color: #1e40af;
+}
+
+/* Formulaires améliorés */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #334155;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Boutons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-size: 0.875rem;
+}
+
+.btn-primary {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.btn-secondary {
+    background-color: #e2e8f0;
+    color: #475569;
+}
+
+.btn-secondary:hover {
+    background-color: #cbd5e1;
+}
+
+.btn-danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #dc2626;
+}
+
+.btn-success {
+    background-color: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+/* Rôles et permissions */
+.role-lecteur .role-gestionnaire {
+    display: none !important;
+}
+
+/* ==========================================================================
+   MODE LECTEUR - OPTIMISATION POUR LA LECTURE
+   ========================================================================== */
+
+/* Amélioration générale de l'interface en mode lecteur */
+body.role-lecteur {
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+/* Amélioration de la lisibilité des tableaux en mode lecteur */
+body.role-lecteur table {
+    font-size: 15px;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+body.role-lecteur table thead {
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+body.role-lecteur table th {
+    padding: 1.25rem 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.1em;
+    border-bottom: 3px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+body.role-lecteur table td {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+body.role-lecteur table tbody tr {
+    transition: all 0.2s ease;
+    background: white;
+}
+
+body.role-lecteur table tbody tr:hover {
+    background: #f8fafc;
+    transform: scale(1.01);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+body.role-lecteur table tbody tr:nth-child(even) {
+    background: #fafbfc;
+}
+
+body.role-lecteur table tbody tr:nth-child(even):hover {
+    background: #f1f5f9;
+}
+
+/* Amélioration des badges de statut en mode lecteur */
+body.role-lecteur .badge {
+    padding: 0.5rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    border-radius: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    letter-spacing: 0.05em;
+}
+
+body.role-lecteur .badge.deficit {
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+}
+
+body.role-lecteur .badge.surplus {
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    color: #065f46;
+    border: 1px solid #6ee7b7;
+}
+
+body.role-lecteur .badge.correct {
+    background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+    color: #1e40af;
+    border: 1px solid #93c5fd;
+}
+
+/* Amélioration des cartes de statistiques en mode lecteur */
+body.role-lecteur .bg-white.rounded-xl {
+    border: 2px solid #e2e8f0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+body.role-lecteur .bg-white.rounded-xl:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+    border-color: #cbd5e1;
+}
+
+/* Amélioration des titres et textes en mode lecteur */
+body.role-lecteur h2,
+body.role-lecteur h3,
+body.role-lecteur h4 {
+    color: #1e293b;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+}
+
+body.role-lecteur .text-slate-500 {
+    color: #64748b !important;
+    font-weight: 500;
+}
+
+body.role-lecteur .text-slate-800 {
+    color: #1e293b !important;
+    font-weight: 600;
+}
+
+/* Amélioration de l'espacement en mode lecteur */
+body.role-lecteur .p-6 {
+    padding: 2rem !important;
+}
+
+body.role-lecteur .mb-6 {
+    margin-bottom: 2rem !important;
+}
+
+body.role-lecteur .mb-8 {
+    margin-bottom: 3rem !important;
+}
+
+/* Amélioration des montants en mode lecteur */
+body.role-lecteur .text-2xl {
+    font-size: 1.75rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.03em;
+}
+
+body.role-lecteur .text-xl {
+    font-size: 1.5rem !important;
+    font-weight: 700 !important;
+}
+
+/* Masquer proprement les colonnes d'actions en mode lecteur */
+body.role-lecteur table th:last-child:has-text("Actions"),
+body.role-lecteur table td:last-child:has(button[style*="display: none"]) {
+    display: none !important;
+}
+
+/* Amélioration de la sidebar en mode lecteur */
+body.role-lecteur aside {
+    background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+}
+
+body.role-lecteur .nav-item {
+    padding: 1rem 1.25rem;
+    margin: 0.25rem 0;
+    border-radius: 0.75rem;
+}
+
+/* Amélioration du header en mode lecteur */
+body.role-lecteur header {
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border-bottom: 2px solid #e2e8f0;
+    padding: 1.5rem 2rem;
+}
+
+/* Amélioration des zones de recherche en mode lecteur */
+body.role-lecteur input[type="text"],
+body.role-lecteur input[type="search"],
+body.role-lecteur select {
+    padding: 0.875rem 1.25rem;
+    font-size: 15px;
+    border: 2px solid #e2e8f0;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+body.role-lecteur input[type="text"]:focus,
+body.role-lecteur input[type="search"]:focus,
+body.role-lecteur select:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    outline: none;
+}
+
+/* Amélioration des conteneurs de tableaux en mode lecteur */
+body.role-lecteur .bg-white.rounded-xl.shadow-sm {
+    border-radius: 1rem;
+    overflow: hidden;
+    border: 2px solid #e2e8f0;
+}
+
+/* Amélioration des icônes en mode lecteur */
+body.role-lecteur i {
+    opacity: 0.9;
+}
+
+/* Amélioration de la zone de contenu principal en mode lecteur */
+body.role-lecteur main {
+    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+}
+
+/* Amélioration des cartes de statistiques du dashboard en mode lecteur */
+body.role-lecteur .bg-white.rounded-xl.p-6.shadow-sm.border {
+    padding: 2rem !important;
+    border-width: 2px !important;
+}
+
+/* Masquer les boutons d'action de manière plus élégante */
+body.role-lecteur button[style*="display: none"] {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
+}
+
+/* Amélioration de la lisibilité des dates et montants */
+body.role-lecteur table td:first-child {
+    font-weight: 600;
+    color: #475569;
+}
+
+body.role-lecteur table td:nth-child(4),
+body.role-lecteur table td:nth-child(5) {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1e293b;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Amélioration de l'espacement entre les lignes du tableau */
+body.role-lecteur table tbody tr {
+    height: 4rem;
+}
+
+/* Amélioration de la zone de filtres en mode lecteur */
+body.role-lecteur .bg-slate-50\/50 {
+    background: #f8fafc !important;
+    padding: 1.5rem !important;
+    border-radius: 1rem !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Classe supplémentaire pour le mode lecture seule actif */
+body.readonly-mode-active {
+    /* Amélioration supplémentaire de la lisibilité - styles appliqués via .role-lecteur */
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+body.readonly-mode-active table tbody tr {
+    cursor: default;
+}
+
+body.readonly-mode-active table tbody tr:hover {
+    cursor: default;
+}
+
+/* Masquer proprement les colonnes d'actions en mode lecteur */
+body.role-lecteur table th[style*="display: none"],
+body.role-lecteur table td[style*="display: none"] {
+    display: none !important;
+    width: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+}
+
+/* Amélioration de l'affichage des montants en mode lecteur */
+body.role-lecteur table td:nth-child(4),
+body.role-lecteur table td:nth-child(5) {
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+/* Amélioration de l'affichage des dates en mode lecteur */
+body.role-lecteur table td:first-child {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Amélioration de la zone de recherche et filtres */
+body.role-lecteur .bg-slate-50\/50,
+body.role-lecteur .p-4.border-b {
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+    border: 2px solid #e2e8f0 !important;
+    border-radius: 1rem !important;
+}
+
+/* Amélioration des icônes dans les tableaux */
+body.role-lecteur table i {
+    font-size: 1.1em;
+    margin-right: 0.5rem;
+}
+
+/* Amélioration de l'espacement général */
+body.role-lecteur .max-w-7xl {
+    max-width: 90rem;
+}
+
+body.role-lecteur .p-6 {
+    padding: 2.5rem !important;
+}
+
+/* Amélioration de la lisibilité des textes secondaires */
+body.role-lecteur .text-slate-400 {
+    color: #94a3b8 !important;
+    font-weight: 500;
+}
+
+/* Amélioration des cartes de statistiques */
+body.role-lecteur .bg-white.rounded-xl.p-6.shadow-sm.border.border-slate-100 {
+    background: white !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08) !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+body.role-lecteur .bg-white.rounded-xl.p-6.shadow-sm.border.border-slate-100:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+    transform: translateY(-4px);
+}
+
+/* ==========================================================================
+   CARTES MOBILES POUR LA LISTE DES RECETTES
+   ========================================================================== */
+
+/* Styles pour les cartes de recettes sur mobile */
+#recipesCardsContainer {
+    min-height: 200px;
+}
+
+#recipesCardsContainer > div {
+    animation: slideUpFade 0.3s ease-out;
+    animation-fill-mode: both;
+}
+
+#recipesCardsContainer > div:nth-child(1) { animation-delay: 0.05s; }
+#recipesCardsContainer > div:nth-child(2) { animation-delay: 0.1s; }
+#recipesCardsContainer > div:nth-child(3) { animation-delay: 0.15s; }
+#recipesCardsContainer > div:nth-child(4) { animation-delay: 0.2s; }
+#recipesCardsContainer > div:nth-child(5) { animation-delay: 0.25s; }
+
+/* Amélioration des cartes de recettes */
+#recipesCardsContainer .bg-white.rounded-xl {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+#recipesCardsContainer .bg-white.rounded-xl::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+#recipesCardsContainer .bg-white.rounded-xl:hover::before {
+    transform: scaleY(1);
+}
+
+#recipesCardsContainer .bg-white.rounded-xl:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: #cbd5e1;
+}
+
+/* Amélioration des boutons dans les cartes */
+#recipesCardsContainer button {
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+#recipesCardsContainer button:active {
+    transform: scale(0.98);
+}
+
+/* Amélioration des badges dans les cartes */
+#recipesCardsContainer .px-3.py-1.rounded-lg {
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Amélioration de l'affichage des montants dans les cartes */
+#recipesCardsContainer .text-base.font-bold {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+
+/* Espacement amélioré pour les cartes */
+#recipesCardsContainer .space-y-2 > * + * {
+    margin-top: 0.75rem;
+}
+
+/* Responsive pour mode lecteur */
+@media (max-width: 768px) {
+    body.role-lecteur table {
+        font-size: 14px;
+    }
+    
+    body.role-lecteur table th,
+    body.role-lecteur table td {
+        padding: 0.875rem 0.75rem;
+    }
+    
+    body.role-lecteur .text-2xl {
+        font-size: 1.5rem !important;
+    }
+    
+    body.role-lecteur .p-6 {
+        padding: 1.5rem !important;
+    }
+    
+    /* Amélioration des cartes sur mobile */
+    #recipesCardsContainer {
+        padding: 1rem !important;
+    }
+    
+    #recipesCardsContainer > div {
+        padding: 1.25rem !important;
+    }
+    
+    #recipesCardsContainer button {
+        padding: 0.75rem 1rem !important;
+        font-size: 0.8125rem !important;
+    }
+}
+
+/* Page de login */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.login-page.hidden {
+    display: none;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 400px;
+    padding: 2rem;
+}
+
+.login-card {
+    background: white;
+    border-radius: 1rem;
+    padding: 2.5rem;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.login-error {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background-color: #fee2e2;
+    color: #991b1b;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    display: none;
+}
+
+.login-error.show {
+    display: block;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Menu mobile */
+#navMenu.active {
+    transform: translateX(0);
+}
+
+#navMenu {
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Overlay pour fermer le menu mobile */
+.mobile-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 30;
+}
+
+.mobile-overlay.active {
+    display: block;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .toast {
+        right: 1rem;
+        left: 1rem;
+        max-width: none;
+    }
+    
+    .modal-content {
+        width: 95%;
+        padding: 1.5rem;
+    }
+    
+    table {
+        font-size: 0.875rem;
+    }
+    
+    table th,
+    table td {
+        padding: 0.75rem 0.5rem;
+    }
+    
+    /* Masquer la sidebar desktop sur mobile */
+    aside {
+        display: none !important;
+    }
+}
+
+/* Amélioration de l'accessibilité */
+*:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+    position: relative;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2rem;
+    height: 2rem;
+    margin: -1rem 0 0 -1rem;
+    border: 3px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Animation pour le message d'information */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -20px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
+    to {
+        opacity: 0;
+        transform: translate(-50%, -20px);
+    }
+}
+
+.animate-slideDown {
+    animation: slideDown 0.4s ease-out;
+}
+
+/* Styles pour le bouton d'actualisation */
+#refreshDataBtn {
+    position: relative;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+#refreshDataBtn:hover {
+    transform: scale(1.1);
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+#refreshDataBtn:active {
+    transform: scale(0.95);
+}
+
+#refreshDataBtn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+#refreshDataBtn i.fa-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* Indicateur de statut sur le bouton */
+#refreshDataBtn .fa-rotate {
+    transition: transform 0.3s ease;
+}
+
+#refreshDataBtn:hover .fa-rotate {
+    transform: rotate(180deg);
+}
+
+/* Message d'information au démarrage */
+#startupInfoMessage {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+#startupInfoMessage button {
+    transition: all 0.2s ease;
+}
+
+#startupInfoMessage button:hover {
+    transform: translateY(-1px);
+}
+
+/* 
+   7. STYLES POUR LES CARTES DU DASHBOARD
+   --------------------------------------------------------------------------
+*/
+
+.dashboard-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.dashboard-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    border-color: #3b82f6;
+}
+
+.dashboard-card:hover::before {
+    transform: scaleY(1);
+}
+
+.dashboard-card .card-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    color: #3b82f6;
+    background: linear-gradient(135deg, #dbeafe, #e0e7ff);
+    margin-bottom: 1rem;
+}
+
+.dashboard-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+}
+
+.dashboard-card p {
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+/* Cartes de statistiques */
+.stat-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.stat-value {
+    font-size: 1.875rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0.5rem 0;
+}
+
+.stat-value.stat-positive {
+    color: #059669;
+}
+
+.stat-value.stat-negative {
+    color: #dc2626;
+}
+
+/* Conteneurs de graphiques */
+.chart-card {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    margin-bottom: 1.5rem;
+}
+
+.chart-card h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #f1f5f9;
+}
+
+.chart-card canvas {
+    max-height: 300px;
+}
+
+/* Amélioration des formulaires */
+.form-container {
+    background: white;
+    border-radius: 0.75rem;
+    padding: 2rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.form-actions .btn {
+    flex: 1;
+}
+
+/* Zone de recherche et filtres */
+.search-filters {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 0.75rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+}
+
+.search-group {
+    position: relative;
+    margin-bottom: 1rem;
+}
+
+.search-group i {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+}
+
+.search-group input {
+    padding-left: 2.5rem;
+}
+
+.filter-group {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.filter-group select,
+.filter-group input[type="date"] {
+    flex: 1;
+    min-width: 150px;
+}
+
+/* Amélioration de la navigation */
+.nav-link.active {
+    background-color: rgba(59, 130, 246, 0.15);
+    color: #ffffff;
+    border-right: 3px solid #3b82f6;
+    font-weight: 600;
+}
+
+.nav-link.active i {
+    color: #60a5fa;
+}
