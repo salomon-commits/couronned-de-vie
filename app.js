@@ -3540,12 +3540,31 @@ function addForceReloadButton() {
     document.body.appendChild(forceReloadBtn);
 }
 
+// Détecter si on est sur iOS en mode standalone
+function isIOSStandalone() {
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isStandalone = window.navigator.standalone === true || 
+                        window.matchMedia('(display-mode: standalone)').matches;
+    return isIOS && isStandalone;
+}
+
 // Initialiser le pull-to-refresh pour mobile/PWA
 function initPullToRefresh() {
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const isStandalone = isIOSStandalone();
+    
+    // Sur iOS en mode standalone, créer aussi un bouton d'actualisation visible
+    // car le pull-to-refresh peut être moins fiable
+    if (isIOS && isStandalone) {
+        createIOSRefreshButton();
+        // On continue quand même avec le pull-to-refresh pour ceux qui préfèrent
+    }
+    
     let touchStartY = 0;
     let touchEndY = 0;
     let isRefreshing = false;
     let pullDistance = 0;
+    let touchStartTime = 0;
     
     // Créer l'indicateur de pull-to-refresh
     const refreshIndicator = document.createElement('div');
@@ -3553,27 +3572,33 @@ function initPullToRefresh() {
     refreshIndicator.className = 'fixed top-0 left-0 right-0 bg-brand-600 text-white text-center py-4 z-50 transform -translate-y-full transition-transform duration-300 shadow-lg';
     refreshIndicator.innerHTML = `
         <div class="flex items-center justify-center gap-3">
-            <i class="fa-solid fa-rotate fa-spin text-xl"></i>
-            <span class="font-medium">Actualisation...</span>
+            <i class="fa-solid fa-rotate text-xl"></i>
+            <span class="font-medium">Tirez pour actualiser</span>
         </div>
     `;
     document.body.appendChild(refreshIndicator);
     
     // Détecter le début du touch
-    document.addEventListener('touchstart', (e) => {
-        if (window.scrollY === 0 && !isRefreshing) {
+    const mainContent = document.querySelector('main') || document.body;
+    mainContent.addEventListener('touchstart', (e) => {
+        // Vérifier qu'on est en haut de la page
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+        if (scrollTop <= 5 && !isRefreshing) {
             touchStartY = e.touches[0].clientY;
+            touchStartTime = Date.now();
+        } else {
+            touchStartY = 0;
         }
     }, { passive: true });
     
     // Détecter le mouvement
-    document.addEventListener('touchmove', (e) => {
-        if (window.scrollY === 0 && touchStartY > 0 && !isRefreshing) {
+    mainContent.addEventListener('touchmove', (e) => {
+        if (touchStartY > 0 && !isRefreshing) {
             touchEndY = e.touches[0].clientY;
             pullDistance = touchEndY - touchStartY;
             
             if (pullDistance > 0) {
-                // Empêcher le scroll si on tire vers le bas
+                // Empêcher le scroll si on tire vers le bas depuis le haut
                 if (pullDistance > 10) {
                     e.preventDefault();
                 }
@@ -3585,15 +3610,22 @@ function initPullToRefresh() {
                 
                 // Changer l'icône quand on atteint le seuil
                 const icon = refreshIndicator.querySelector('i');
-                if (icon) {
+                const span = refreshIndicator.querySelector('span');
+                if (icon && span) {
                     if (pullDistance > 80) {
                         icon.classList.remove('fa-rotate');
                         icon.classList.add('fa-check');
-                        refreshIndicator.querySelector('span').textContent = 'Relâchez pour actualiser';
+                        icon.classList.remove('fa-spin');
+                        span.textContent = 'Relâchez pour actualiser';
                     } else {
                         icon.classList.remove('fa-check');
                         icon.classList.add('fa-rotate');
-                        refreshIndicator.querySelector('span').textContent = 'Tirez pour actualiser';
+                        if (pullDistance > 50) {
+                            icon.classList.add('fa-spin');
+                        } else {
+                            icon.classList.remove('fa-spin');
+                        }
+                        span.textContent = 'Tirez pour actualiser';
                     }
                 }
             }
@@ -3601,16 +3633,26 @@ function initPullToRefresh() {
     }, { passive: false });
     
     // Détecter la fin du touch
-    document.addEventListener('touchend', async () => {
-        if (pullDistance > 80 && !isRefreshing) {
+    mainContent.addEventListener('touchend', async (e) => {
+        if (pullDistance > 80 && !isRefreshing && touchStartY > 0) {
             isRefreshing = true;
             refreshIndicator.style.transform = 'translateY(0)';
             refreshIndicator.style.opacity = '1';
+            const icon = refreshIndicator.querySelector('i');
+            const span = refreshIndicator.querySelector('span');
+            if (icon) {
+                icon.classList.remove('fa-check', 'fa-rotate');
+                icon.classList.add('fa-spinner', 'fa-spin');
+            }
+            if (span) {
+                span.textContent = 'Actualisation...';
+            }
             
             try {
                 await refreshAllData();
             } catch (error) {
                 console.error('Erreur pull-to-refresh:', error);
+                if (span) span.textContent = 'Erreur lors de l\'actualisation';
             } finally {
                 setTimeout(() => {
                     refreshIndicator.style.transform = 'translateY(-100%)';
@@ -3619,6 +3661,13 @@ function initPullToRefresh() {
                     pullDistance = 0;
                     touchStartY = 0;
                     touchEndY = 0;
+                    if (icon) {
+                        icon.classList.remove('fa-spinner', 'fa-spin');
+                        icon.classList.add('fa-rotate');
+                    }
+                    if (span) {
+                        span.textContent = 'Tirez pour actualiser';
+                    }
                 }, 500);
             }
         } else {
@@ -3630,6 +3679,69 @@ function initPullToRefresh() {
             touchEndY = 0;
         }
     }, { passive: true });
+}
+
+// Créer un bouton d'actualisation visible pour iOS en mode standalone
+function createIOSRefreshButton() {
+    // Vérifier si le bouton n'existe pas déjà
+    if (document.getElementById('iosRefreshButton')) {
+        return;
+    }
+    
+    const iosRefreshBtn = document.createElement('button');
+    iosRefreshBtn.id = 'iosRefreshButton';
+    iosRefreshBtn.className = 'fixed top-20 right-4 bg-brand-600 hover:bg-brand-700 text-white p-3 rounded-full shadow-lg z-50 transition-all flex items-center justify-center';
+    iosRefreshBtn.style.width = '56px';
+    iosRefreshBtn.style.height = '56px';
+    iosRefreshBtn.title = 'Actualiser les données';
+    iosRefreshBtn.innerHTML = '<i class="fa-solid fa-rotate text-xl"></i>';
+    // Fonction d'actualisation pour iOS
+    const handleIOSRefresh = async (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        const icon = iosRefreshBtn.querySelector('i');
+        if (icon) {
+            icon.classList.add('fa-spin');
+        }
+        iosRefreshBtn.disabled = true;
+        iosRefreshBtn.style.opacity = '0.6';
+        iosRefreshBtn.style.pointerEvents = 'none';
+        
+        try {
+            await refreshAllData();
+        } catch (error) {
+            console.error('Erreur actualisation iOS:', error);
+            showToast('Erreur lors de l\'actualisation', 'error');
+        } finally {
+            if (icon) {
+                icon.classList.remove('fa-spin');
+            }
+            iosRefreshBtn.disabled = false;
+            iosRefreshBtn.style.opacity = '1';
+            iosRefreshBtn.style.pointerEvents = 'auto';
+        }
+    };
+    
+    // Attacher les événements
+    iosRefreshBtn.addEventListener('click', handleIOSRefresh, { passive: false });
+    iosRefreshBtn.addEventListener('touchend', handleIOSRefresh, { passive: false });
+    
+    // S'assurer que le bouton est bien configuré pour iOS
+    iosRefreshBtn.setAttribute('role', 'button');
+    iosRefreshBtn.setAttribute('aria-label', 'Actualiser les données');
+    iosRefreshBtn.style.touchAction = 'manipulation';
+    iosRefreshBtn.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
+    iosRefreshBtn.style.cursor = 'pointer';
+    
+    document.body.appendChild(iosRefreshBtn);
+    
+    // Animation d'apparition
+    setTimeout(() => {
+        iosRefreshBtn.style.animation = 'slideDown 0.3s ease-out';
+    }, 500);
 }
 
 // Corriger les problèmes d'événements en mode PWA
@@ -3863,23 +3975,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Gestionnaire du bouton d'actualisation
         const refreshBtn = document.getElementById('refreshDataBtn');
         if (refreshBtn) {
-            // Utiliser plusieurs méthodes pour s'assurer que l'événement fonctionne
-            refreshBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+            // Fonction d'actualisation
+            const handleRefresh = async (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
                 await refreshAllData();
+            };
+            
+            // Utiliser plusieurs méthodes pour s'assurer que l'événement fonctionne
+            refreshBtn.addEventListener('click', handleRefresh, { passive: false });
+            
+            // Aussi avec touchstart/touchend pour mobile/iOS
+            refreshBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
             }, { passive: false });
             
-            // Aussi avec touchstart pour mobile
-            refreshBtn.addEventListener('touchend', async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                await refreshAllData();
-            }, { passive: false });
+            refreshBtn.addEventListener('touchend', handleRefresh, { passive: false });
             
             // S'assurer que le bouton est cliquable
             refreshBtn.style.pointerEvents = 'auto';
             refreshBtn.style.cursor = 'pointer';
+            refreshBtn.style.touchAction = 'manipulation';
+            refreshBtn.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
+            
+            // Pour iOS, s'assurer que le bouton fonctionne
+            if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                refreshBtn.setAttribute('role', 'button');
+                refreshBtn.setAttribute('aria-label', 'Actualiser les données');
+            }
         }
         
         // Ajouter un bouton de rechargement forcé si on est en mode standalone (PWA)
