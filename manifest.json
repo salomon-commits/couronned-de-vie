@@ -1,0 +1,49 @@
+{
+  "name": "Couronne de Vie - Gestion Taxis",
+  "short_name": "Couronne de Vie",
+  "description": "Application de gestion des recettes de taxi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icone.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Ajouter Recette",
+      "short_name": "Ajouter",
+      "description": "Ajouter une nouvelle recette",
+      "url": "/?page=add-recipe",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Liste des Recettes",
+      "short_name": "Liste",
+      "description": "Voir toutes les recettes",
+      "url": "/?page=list-recipes",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
+
