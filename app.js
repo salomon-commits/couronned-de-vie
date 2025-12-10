@@ -39,11 +39,7 @@ function showApplication() {
             setupReadOnlyMode();
         }, 200);
         
-        // Afficher le statut de réception des données
-        const dataStatusInfo = document.getElementById('dataStatusInfo');
-        if (dataStatusInfo) {
-            dataStatusInfo.style.display = !dataReceptionEnabled ? 'block' : 'none';
-        }
+        // ✅ MODIFICATION : Plus de message de statut - les données se synchronisent automatiquement
         
         // Afficher le chatbot pour les lecteurs
         const chatbot = document.getElementById('readerChatbot');
@@ -409,25 +405,10 @@ let allData = {
     comments: []
 };
 
-// Variable pour contrôler la réception des données pour les lecteurs
-let dataReceptionEnabled = false;
-
 // Fonction pour récupérer les données depuis Supabase
 async function fetchDataFromSupabase() {
-    // Vérifier si le lecteur peut recevoir les données
-    // Même pour les lecteurs, on essaie Supabase d'abord (sauf si explicitement désactivé)
-    if (currentRole === 'lecteur' && !dataReceptionEnabled) {
-        console.log('Réception des données désactivée pour les lecteurs - Utilisation d\'IndexedDB');
-        await loadFromIndexedDB();
-        const toast = document.getElementById('toast');
-        if (toast && !toast.classList.contains('show')) {
-            showToast('Mode lecture seule - Les données ne sont pas synchronisées. Contactez le gestionnaire.', 'info');
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 5000);
-        }
-        return false;
-    }
+    // ✅ MODIFICATION : Les lecteurs peuvent toujours recevoir les données depuis Supabase
+    // Plus besoin d'autorisation - les données se synchronisent automatiquement
     
     try {
         console.log('🔌 Tentative de connexion à Supabase...');
@@ -2903,7 +2884,7 @@ async function loadSettings() {
     const defaults = await getSetting('defaultValues') || { value1: 9000, value2: 12000, value3: 15000 };
     const colors = await getSetting('colors') || { primary: '#4CAF50', secondary: '#2196F3' };
     const reminders = await getSetting('reminders') || { time: '18:00', enabled: true };
-    const receptionEnabled = await getSetting('dataReceptionEnabled') || false;
+    // ✅ MODIFICATION : Plus besoin de charger l'état de réception - système supprimé
 
     document.getElementById('defaultValue1').value = defaults.value1;
     document.getElementById('defaultValue2').value = defaults.value2;
@@ -2913,12 +2894,9 @@ async function loadSettings() {
     document.getElementById('reminderTime').value = reminders.time || '18:00';
     document.getElementById('enableReminders').checked = reminders.enabled !== false;
     
-    // Charger l'état de la réception des données
-    const enableDataReception = document.getElementById('enableDataReception');
-    if (enableDataReception) {
-        enableDataReception.checked = receptionEnabled;
-        dataReceptionEnabled = receptionEnabled;
-    }
+    // ✅ MODIFICATION : Le contrôle de réception des données a été supprimé
+    // Les lecteurs reçoivent automatiquement les données depuis Supabase
+    // La synchronisation se fait automatiquement en mode PWA (toutes les 30 secondes)
 
     // Handlers
     document.getElementById('saveDefaults').addEventListener('click', saveDefaults);
@@ -2929,20 +2907,6 @@ async function loadSettings() {
     document.getElementById('importJSON').addEventListener('change', importJSON);
     document.getElementById('importCSV').addEventListener('change', importCSV);
     document.getElementById('clearData').addEventListener('click', confirmClearData);
-    
-    // Bouton de contrôle de réception des données (gestionnaire uniquement)
-    if (enableDataReception) {
-        enableDataReception.addEventListener('change', async (e) => {
-            dataReceptionEnabled = e.target.checked;
-            await setSetting('dataReceptionEnabled', dataReceptionEnabled);
-            showToast(
-                dataReceptionEnabled 
-                    ? 'Réception activée - Les lecteurs recevront les données mises à jour' 
-                    : 'Réception désactivée - Les lecteurs ne recevront pas les données',
-                'success'
-            );
-        });
-    }
     
     // Bouton de rafraîchissement Supabase
     const refreshBtn = document.getElementById('refreshSupabase');
@@ -4499,9 +4463,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Utilisateur connecté, initialiser l'application
         await initDB();
         
-        // Charger l'état de réception des données
-        const receptionEnabled = await getSetting('dataReceptionEnabled') || false;
-        dataReceptionEnabled = receptionEnabled;
+        // ✅ MODIFICATION : Plus besoin de charger l'état de réception - les données se synchronisent automatiquement
         
         // ============================================================
         // 🚀 CORRECTION CRITIQUE : ATTACHER LES ÉVÉNEMENTS EN PREMIER
@@ -4559,16 +4521,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             Notification.requestPermission();
         }
         
-        // Rafraîchir les données toutes les 5 minutes
-        setInterval(async () => {
-            await fetchDataFromSupabase();
-            // Recharger la page active si nécessaire
-            const activePage = document.querySelector('.page.active');
-            if (activePage) {
-                const pageId = activePage.id;
-                showPage(pageId);
-            }
-        }, 300000); // 5 minutes
+        // ============================================================
+        // 🔄 SYNCHRONISATION AUTOMATIQUE EN MODE PWA
+        // ============================================================
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+        
+        if (isPWA) {
+            // En mode PWA, synchroniser plus fréquemment (toutes les 30 secondes)
+            console.log('🔄 Mode PWA détecté - Synchronisation automatique activée (30s)');
+            setInterval(async () => {
+                try {
+                    await fetchDataFromSupabase();
+                    // Recharger la page active si nécessaire
+                    const activePage = document.querySelector('.view-section.active, .page.active');
+                    if (activePage) {
+                        const pageId = activePage.id;
+                        showPage(pageId);
+                    }
+                } catch (error) {
+                    console.error('Erreur lors de la synchronisation automatique:', error);
+                }
+            }, 30000); // 30 secondes en mode PWA
+        } else {
+            // En mode navigateur, synchroniser toutes les 5 minutes
+            setInterval(async () => {
+                try {
+                    await fetchDataFromSupabase();
+                    // Recharger la page active si nécessaire
+                    const activePage = document.querySelector('.view-section.active, .page.active');
+                    if (activePage) {
+                        const pageId = activePage.id;
+                        showPage(pageId);
+                    }
+                } catch (error) {
+                    console.error('Erreur lors de la synchronisation automatique:', error);
+                }
+            }, 300000); // 5 minutes en mode navigateur
+        }
         
         // Enregistrer le Service Worker pour PWA
         registerServiceWorker();
