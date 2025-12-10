@@ -44,14 +44,26 @@ function showApplication() {
         if (dataStatusInfo) {
             dataStatusInfo.style.display = !dataReceptionEnabled ? 'block' : 'none';
         }
+        
+        // Afficher le chatbot pour les lecteurs
+        const chatbot = document.getElementById('readerChatbot');
+        if (chatbot) {
+            chatbot.style.display = 'block';
+        }
     } else {
         document.body.classList.remove('role-lecteur');
         // Masquer les éléments réservés aux lecteurs
         document.querySelectorAll('.role-lecteur').forEach(el => {
-            if (el.id !== 'dataStatusInfo') {
+            if (el.id !== 'dataStatusInfo' && el.id !== 'readerChatbot') {
                 el.style.display = 'none';
             }
         });
+        
+        // Masquer le chatbot pour les gestionnaires
+        const chatbot = document.getElementById('readerChatbot');
+        if (chatbot) {
+            chatbot.style.display = 'none';
+        }
     }
 }
 
@@ -3806,6 +3818,395 @@ function fixPWAEventHandlers() {
     }, 2000);
 }
 
+// ==========================================================================
+// CHATBOT INTELLIGENT POUR LES LECTEURS
+// ==========================================================================
+
+let aiAssistant = null;
+
+// Initialiser le chatbot pour les lecteurs
+function initReaderChatbot() {
+    // Vérifier que l'assistant IA est disponible
+    if (typeof AIAssistant !== 'undefined') {
+        aiAssistant = new AIAssistant();
+    }
+    
+    const chatbotToggle = document.getElementById('chatbotToggle');
+    const chatbotWindow = document.getElementById('chatbotWindow');
+    const chatbotClose = document.getElementById('chatbotClose');
+    const chatbotSend = document.getElementById('chatbotSend');
+    const chatbotInput = document.getElementById('chatbotInput');
+    const chatbotMessages = document.getElementById('chatbotMessages');
+    const chatbotSuggestions = document.getElementById('chatbotSuggestions');
+    
+    if (!chatbotToggle || !chatbotWindow) return;
+    
+    // Toggle de la fenêtre
+    chatbotToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatbotWindow.classList.toggle('active');
+        if (chatbotWindow.classList.contains('active')) {
+            chatbotInput.focus();
+            // Masquer le badge
+            const badge = chatbotToggle.querySelector('.chatbot-badge');
+            if (badge) {
+                badge.classList.add('hidden');
+                badge.style.display = 'none';
+            }
+        }
+    });
+    
+    // Aussi avec touch pour iOS
+    chatbotToggle.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        chatbotToggle.click();
+    }, { passive: false });
+    
+    chatbotClose.addEventListener('click', (e) => {
+        e.preventDefault();
+        chatbotWindow.classList.remove('active');
+    });
+    
+    // Fermer en cliquant à l'extérieur (optionnel)
+    document.addEventListener('click', (e) => {
+        if (chatbotWindow.classList.contains('active') && 
+            !chatbotWindow.contains(e.target) && 
+            !chatbotToggle.contains(e.target)) {
+            // Ne pas fermer automatiquement, laisser l'utilisateur contrôler
+        }
+    });
+    
+    // Envoyer un message
+    const sendMessage = async () => {
+        const message = chatbotInput.value.trim();
+        if (!message) return;
+        
+        // Afficher le message de l'utilisateur
+        addMessage(message, 'user');
+        chatbotInput.value = '';
+        chatbotSend.disabled = true;
+        
+        // Afficher le loading
+        const loadingId = addMessage('', 'bot', true);
+        
+        try {
+            // Récupérer les données actuelles pour le contexte
+            let recipes = [];
+            try {
+                recipes = await getAllRecipes();
+            } catch (error) {
+                console.warn('Erreur récupération recettes pour chatbot:', error);
+                recipes = allData.recipes || [];
+            }
+            const taxis = allData.taxis || [];
+            const drivers = allData.drivers || [];
+            
+            // Préparer le contexte
+            const context = {
+                recipes: recipes,
+                taxis: taxis,
+                drivers: drivers,
+                currentRole: currentRole,
+                currentDate: new Date().toLocaleDateString('fr-FR')
+            };
+            
+            // Appeler l'API DeepSeek via l'assistant IA
+            let response;
+            if (aiAssistant && typeof aiAssistant.chat === 'function') {
+                const result = await aiAssistant.chat(message, context);
+                response = result.response || result;
+            } else {
+                // Fallback : appeler directement DeepSeek
+                response = await callDeepSeekAPI(message, context);
+            }
+            
+            // Remplacer le loading par la réponse
+            removeMessage(loadingId);
+            addMessage(response, 'bot');
+            
+            // Mettre à jour les suggestions de manière intelligente
+            updateSuggestions(message, response);
+            
+            // Vérifier si la réponse contient des actions à suggérer
+            if (response.toLowerCase().includes('liste') || response.toLowerCase().includes('recette')) {
+                // Suggérer d'aller à la liste
+                setTimeout(() => {
+                    const suggestion = chatbotSuggestions.querySelector('[data-suggestion*="recette"]');
+                    if (suggestion) {
+                        suggestion.style.animation = 'pulse 1s ease-in-out';
+                        setTimeout(() => {
+                            suggestion.style.animation = '';
+                        }, 1000);
+                    }
+                }, 500);
+            }
+            
+        } catch (error) {
+            console.error('Erreur chatbot:', error);
+            removeMessage(loadingId);
+            addMessage('Désolé, une erreur est survenue. Veuillez réessayer.', 'bot');
+        } finally {
+            chatbotSend.disabled = false;
+            chatbotInput.focus();
+        }
+    };
+    
+    // Envoyer avec le bouton
+    chatbotSend.addEventListener('click', sendMessage);
+    
+    // Envoyer avec Enter
+    chatbotInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Suggestions - réattacher les événements
+    function attachSuggestionHandlers() {
+        chatbotSuggestions.querySelectorAll('.suggestion-chip').forEach(chip => {
+            // Supprimer les anciens listeners
+            const newChip = chip.cloneNode(true);
+            chip.parentNode.replaceChild(newChip, chip);
+            
+            // Attacher le nouveau listener
+            newChip.addEventListener('click', () => {
+                const suggestion = newChip.getAttribute('data-suggestion');
+                if (suggestion) {
+                    chatbotInput.value = suggestion;
+                    chatbotInput.focus();
+                    sendMessage();
+                }
+            });
+        });
+    }
+    
+    attachSuggestionHandlers();
+    
+    // Réattacher après mise à jour des suggestions
+    const originalUpdateSuggestions = updateSuggestions;
+    window.updateSuggestions = function(...args) {
+        originalUpdateSuggestions(...args);
+        setTimeout(attachSuggestionHandlers, 100);
+    };
+}
+
+// Ajouter un message dans le chat
+function addMessage(content, type, isLoading = false) {
+    const messagesContainer = document.getElementById('chatbotMessages');
+    if (!messagesContainer) return null;
+    
+    const messageId = 'msg-' + Date.now();
+    const messageDiv = document.createElement('div');
+    messageDiv.id = messageId;
+    messageDiv.className = `message ${type}-message`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'message-avatar';
+    avatar.innerHTML = type === 'bot' ? '<i class="fa-solid fa-robot"></i>' : '<i class="fa-solid fa-user"></i>';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    if (isLoading) {
+        contentDiv.innerHTML = '<div class="loading"><span></span><span></span><span></span></div>';
+    } else {
+        const p = document.createElement('p');
+        p.textContent = content;
+        contentDiv.appendChild(p);
+    }
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messagesContainer.appendChild(messageDiv);
+    
+    // Scroll vers le bas
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    return messageId;
+}
+
+// Supprimer un message (pour remplacer le loading)
+function removeMessage(messageId) {
+    const message = document.getElementById(messageId);
+    if (message) {
+        message.remove();
+    }
+}
+
+// Appeler directement l'API DeepSeek avec contexte intelligent
+async function callDeepSeekAPI(message, context) {
+    const config = window.DEEPSEEK_CONFIG;
+    if (!config || !config.API_KEY) {
+        return 'Configuration API non disponible. Veuillez contacter le gestionnaire.';
+    }
+    
+    // Analyser les données pour créer un contexte riche
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecipes = (context.recipes || []).filter(r => r.date === today);
+    const totalToday = todayRecipes.reduce((sum, r) => sum + (parseFloat(r.montantVerse) || 0), 0);
+    
+    const deficits = (context.recipes || []).filter(r => {
+        const diff = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
+        return diff < 0;
+    });
+    const totalDeficit = deficits.reduce((sum, r) => {
+        const diff = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
+        return sum + Math.abs(diff);
+    }, 0);
+    
+    const surpluses = (context.recipes || []).filter(r => {
+        const diff = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
+        return diff > 0;
+    });
+    const totalSurplus = surpluses.reduce((sum, r) => {
+        const diff = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
+        return sum + diff;
+    }, 0);
+    
+    // Construire le contexte système intelligent
+    let systemPrompt = `Tu es "Assistant Couronne", un assistant IA intelligent et bienveillant pour l'application "Couronne de Vie" (gestion de recettes de taxi). Tu aides les lecteurs à comprendre et utiliser leurs données.\n\n`;
+    
+    systemPrompt += `RÈGLES IMPORTANTES:\n`;
+    systemPrompt += `- Réponds TOUJOURS en français\n`;
+    systemPrompt += `- Sois concis mais complet (max 3-4 phrases)\n`;
+    systemPrompt += `- Utilise un ton professionnel mais amical\n`;
+    systemPrompt += `- Donne des conseils pratiques et actionnables\n`;
+    systemPrompt += `- Si tu ne sais pas, dis-le honnêtement\n\n`;
+    
+    systemPrompt += `DONNÉES ACTUELLES:\n`;
+    systemPrompt += `- Date: ${context.currentDate}\n`;
+    systemPrompt += `- Recettes aujourd'hui: ${todayRecipes.length} (Total: ${totalToday.toLocaleString()} FCFA)\n`;
+    systemPrompt += `- Total recettes enregistrées: ${(context.recipes || []).length}\n`;
+    
+    if (deficits.length > 0) {
+        systemPrompt += `- ⚠️ Déficits: ${deficits.length} recettes (Total: ${totalDeficit.toLocaleString()} FCFA)\n`;
+    }
+    if (surpluses.length > 0) {
+        systemPrompt += `- ✅ Surplus: ${surpluses.length} recettes (Total: ${totalSurplus.toLocaleString()} FCFA)\n`;
+    }
+    
+    // Analyser les tendances
+    if (context.recipes && context.recipes.length >= 7) {
+        const last7 = context.recipes.slice(0, 7);
+        const avg7 = last7.reduce((sum, r) => sum + (parseFloat(r.montantVerse) || 0), 0) / 7;
+        systemPrompt += `- 📊 Moyenne 7 derniers jours: ${avg7.toLocaleString()} FCFA\n`;
+    }
+    
+    systemPrompt += `\nCAPACITÉS:\n`;
+    systemPrompt += `- Expliquer les données et statistiques\n`;
+    systemPrompt += `- Aider à comprendre les déficits/surplus\n`;
+    systemPrompt += `- Guider dans la navigation de l'application\n`;
+    systemPrompt += `- Répondre aux questions sur les recettes\n\n`;
+    
+    systemPrompt += `Réponds de manière utile et contextuelle. Si l'utilisateur demande quelque chose de spécifique, utilise les données ci-dessus.`;
+    
+    try {
+        const response = await fetch(`${config.BASE_URL}/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.API_KEY}`
+            },
+            body: JSON.stringify({
+                model: config.MODEL || 'deepseek-chat',
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: message }
+                ],
+                temperature: 0.7,
+                max_tokens: 600
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || 'Erreur API');
+        }
+        
+        const data = await response.json();
+        if (data.choices && data.choices[0] && data.choices[0].message) {
+            return data.choices[0].message.content;
+        }
+        
+        throw new Error('Format de réponse invalide');
+    } catch (error) {
+        console.error('Erreur DeepSeek:', error);
+        
+        // Réponse de fallback intelligente basée sur le message
+        const lowerMessage = message.toLowerCase();
+        if (lowerMessage.includes('recette') || lowerMessage.includes('aujourd\'hui')) {
+            return `Aujourd'hui, vous avez ${todayRecipes.length} recette${todayRecipes.length > 1 ? 's' : ''} pour un total de ${totalToday.toLocaleString()} FCFA. ${todayRecipes.length === 0 ? 'Aucune recette enregistrée aujourd\'hui.' : 'Consultez la page "Liste des Recettes" pour voir les détails.'}`;
+        }
+        if (lowerMessage.includes('déficit') || lowerMessage.includes('déficits')) {
+            return `Vous avez ${deficits.length} recette${deficits.length > 1 ? 's' : ''} en déficit pour un total de ${totalDeficit.toLocaleString()} FCFA. Un déficit signifie que le montant versé est inférieur au montant attendu.`;
+        }
+        if (lowerMessage.includes('statistique') || lowerMessage.includes('graphique')) {
+            return `Consultez la page "Statistiques" pour voir des graphiques détaillés de vos données. Vous y trouverez des analyses par jour, par taxi, et par chauffeur.`;
+        }
+        
+        return 'Je rencontre une difficulté technique. Pouvez-vous reformuler votre question ? Je peux vous aider à comprendre vos recettes, les statistiques, et naviguer dans l\'application.';
+    }
+}
+
+// Mettre à jour les suggestions de manière intelligente
+function updateSuggestions(lastMessage, response) {
+    const suggestionsContainer = document.getElementById('chatbotSuggestions');
+    if (!suggestionsContainer) return;
+    
+    const lowerMessage = lastMessage.toLowerCase();
+    const lowerResponse = response.toLowerCase();
+    
+    // Suggestions contextuelles basées sur la conversation
+    let newSuggestions = [];
+    
+    // Si on parle de recettes
+    if (lowerMessage.includes('recette') || lowerResponse.includes('recette')) {
+        newSuggestions.push({
+            text: 'Voir toutes mes recettes',
+            icon: 'fa-list',
+            query: 'Montre-moi toutes mes recettes'
+        });
+    }
+    
+    // Si on parle de statistiques
+    if (lowerMessage.includes('statistique') || lowerMessage.includes('graphique') || lowerResponse.includes('statistique')) {
+        newSuggestions.push({
+            text: 'Voir les statistiques',
+            icon: 'fa-chart-pie',
+            query: 'Explique-moi les statistiques'
+        });
+    }
+    
+    // Si on parle de déficits
+    if (lowerMessage.includes('déficit') || lowerResponse.includes('déficit')) {
+        newSuggestions.push({
+            text: 'Comment réduire les déficits ?',
+            icon: 'fa-lightbulb',
+            query: 'Comment puis-je réduire les déficits ?'
+        });
+    }
+    
+    // Suggestions générales si pas assez de suggestions contextuelles
+    if (newSuggestions.length < 2) {
+        newSuggestions.push(
+            { text: 'Mes données aujourd\'hui', icon: 'fa-calendar-day', query: 'Quelles sont mes recettes aujourd\'hui ?' },
+            { text: 'Expliquer les graphiques', icon: 'fa-chart-bar', query: 'Comment lire les graphiques ?' }
+        );
+    }
+    
+    // Mettre à jour les chips (garder les 3 premiers)
+    const chips = suggestionsContainer.querySelectorAll('.suggestion-chip');
+    chips.forEach((chip, index) => {
+        if (newSuggestions[index]) {
+            chip.setAttribute('data-suggestion', newSuggestions[index].query);
+            chip.innerHTML = `<i class="fa-solid ${newSuggestions[index].icon}"></i> ${newSuggestions[index].text}`;
+        }
+    });
+}
+
 // Rendre TOUTES les fonctions importantes accessibles globalement pour iOS PWA
 window.reloadApp = reloadApp;
 window.closeUpdateNotification = closeUpdateNotification;
@@ -4123,6 +4524,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                     window.forceInitEvents();
                 }
             }, 10000); // Toutes les 10 secondes
+        }
+        
+        // Initialiser le chatbot pour les lecteurs
+        if (currentRole === 'lecteur') {
+            // Attendre que le DOM soit complètement chargé
+            setTimeout(() => {
+                initReaderChatbot();
+                
+                // Afficher une notification discrète pour informer de la disponibilité du chatbot
+                setTimeout(() => {
+                    const chatbot = document.getElementById('readerChatbot');
+                    if (chatbot) {
+                        const badge = chatbot.querySelector('.chatbot-badge');
+                        if (badge) {
+                            badge.style.display = 'flex';
+                            badge.classList.remove('hidden');
+                        }
+                    }
+                }, 2000);
+            }, 500);
         }
     } catch (error) {
         console.error('Erreur d\'initialisation:', error);

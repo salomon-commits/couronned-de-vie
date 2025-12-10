@@ -864,6 +864,63 @@
     <!-- Toast Notifications -->
     <div id="toast" class="toast"></div>
 
+    <!-- Chatbot flottant pour les lecteurs -->
+    <div id="readerChatbot" class="reader-chatbot role-lecteur">
+        <!-- Bulle flottante -->
+        <button id="chatbotToggle" class="chatbot-bubble">
+            <i class="fa-solid fa-robot"></i>
+            <span class="chatbot-badge">1</span>
+        </button>
+        
+        <!-- Fenêtre de chat -->
+        <div id="chatbotWindow" class="chatbot-window">
+            <div class="chatbot-header">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white">Assistant Couronne</h3>
+                        <p class="text-xs text-white/80">Je suis là pour vous aider</p>
+                    </div>
+                </div>
+                <button id="chatbotClose" class="text-white/80 hover:text-white">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="chatbot-messages" id="chatbotMessages">
+                <div class="message bot-message">
+                    <div class="message-avatar">
+                        <i class="fa-solid fa-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>Bonjour ! 👋 Je suis votre assistant intelligent. Je peux vous aider à comprendre vos données, répondre à vos questions sur les recettes, et vous donner des conseils. Comment puis-je vous aider aujourd'hui ?</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="chatbot-suggestions" id="chatbotSuggestions">
+                <button class="suggestion-chip" data-suggestion="Quelles sont mes recettes aujourd'hui ?">
+                    <i class="fa-solid fa-calendar-day"></i> Recettes aujourd'hui
+                </button>
+                <button class="suggestion-chip" data-suggestion="Comment lire les statistiques ?">
+                    <i class="fa-solid fa-chart-bar"></i> Lire les stats
+                </button>
+                <button class="suggestion-chip" data-suggestion="Explique-moi les déficits et surplus">
+                    <i class="fa-solid fa-info-circle"></i> Déficits/Surplus
+                </button>
+            </div>
+            
+            <div class="chatbot-input-container">
+                <input type="text" id="chatbotInput" placeholder="Posez votre question..." class="chatbot-input">
+                <button id="chatbotSend" class="chatbot-send-btn">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Script de compatibilité (doit être chargé avant app.js) -->
     <script src="compatibility.js"></script>
     
