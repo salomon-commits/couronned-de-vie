@@ -1,6 +1,7 @@
 // Gestion des rôles et authentification
 const ACCESS_CODES = {
     'couronne01': 'lecteur',
+    'boss01': 'lecteur',
     'couronne02': 'gestionnaire'
 };
 
@@ -142,8 +143,18 @@ function initializeAppEvents() {
 }
 
 // Fonction pour gérer le login
-function handleLogin(code) {
-    const role = ACCESS_CODES[code.toLowerCase()];
+function handleLogin(code = null, directRole = null) {
+    let role = null;
+    
+    // Si un rôle direct est fourni (pour le mode lecteur sans code)
+    if (directRole) {
+        role = directRole;
+    } 
+    // Sinon, vérifier le code
+    else if (code) {
+        role = ACCESS_CODES[code.toLowerCase()];
+    }
+    
     if (role) {
         currentRole = role;
         sessionStorage.setItem('userRole', role);
@@ -312,6 +323,14 @@ const SUPABASE_CONFIG = {
     ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuemdncmp2a3d4d3R2cXNscHdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUyNTk1NTIsImV4cCI6MjA4MDgzNTU1Mn0.Pzde_ldso40IkIon3FQ1DL4IdYJoLO5QKFmKxVlZ4Uw'
 };
 
+// ✅ Vérification de la configuration Supabase au chargement
+console.log('🔧 Configuration Supabase:', {
+    URL: SUPABASE_CONFIG.URL,
+    ANON_KEY_PRESENT: !!SUPABASE_CONFIG.ANON_KEY,
+    ANON_KEY_LENGTH: SUPABASE_CONFIG.ANON_KEY?.length || 0,
+    CONFIGURED: !!(SUPABASE_CONFIG.URL && SUPABASE_CONFIG.ANON_KEY && SUPABASE_CONFIG.ANON_KEY.length > 50)
+});
+
 // Configuration Assistant IA - DeepSeek API
 window.DEEPSEEK_CONFIG = {
     API_KEY: 'sk-05ba08f8591e464bb3dce3ce44f66882',
@@ -429,14 +448,29 @@ async function fetchDataFromSupabase() {
         console.log('🧪 Test de connexion Supabase...');
         try {
             const testResponse = await fetch(`${SUPABASE_CONFIG.URL}/rest/v1/`, {
+                method: 'GET',
                 headers: {
                     'apikey': SUPABASE_CONFIG.ANON_KEY,
-                    'Authorization': `Bearer ${SUPABASE_CONFIG.ANON_KEY}`
+                    'Authorization': `Bearer ${SUPABASE_CONFIG.ANON_KEY}`,
+                    'Content-Type': 'application/json'
                 }
             });
-            console.log('✅ Connexion Supabase OK - Status:', testResponse.status);
+            
+            if (testResponse.ok || testResponse.status === 200 || testResponse.status === 404) {
+                // 404 est OK car on teste juste l'endpoint, pas une table spécifique
+                console.log('✅ Connexion Supabase OK - Status:', testResponse.status);
+                console.log('✅ URL Supabase accessible:', SUPABASE_CONFIG.URL);
+                console.log('✅ Clé API valide');
+            } else {
+                console.warn('⚠️ Connexion Supabase - Status:', testResponse.status);
+            }
         } catch (testError) {
-            console.warn('⚠️ Test de connexion échoué:', testError);
+            console.error('❌ Test de connexion Supabase échoué:', testError);
+            console.error('❌ Vérifiez que:', {
+                URL: SUPABASE_CONFIG.URL,
+                'Clé API présente': !!SUPABASE_CONFIG.ANON_KEY,
+                'Connexion internet': 'Vérifiez votre connexion'
+            });
         }
         
         // Récupérer toutes les données en parallèle depuis Supabase avec gestion d'erreur et timeout
@@ -4411,7 +4445,40 @@ function initLogin() {
     const loginForm = document.getElementById('loginForm');
     const accessCodeInput = document.getElementById('accessCode');
     const loginError = document.getElementById('loginError');
+    const readerModeBtn = document.getElementById('readerModeBtn');
+    const managerAccessBtn = document.getElementById('managerAccessBtn');
+    const cancelManagerBtn = document.getElementById('cancelManagerBtn');
+    const loginActions = document.querySelector('.login-actions');
 
+    // Bouton Mode Lecteur - Accès direct sans code
+    if (readerModeBtn) {
+        readerModeBtn.addEventListener('click', () => {
+            handleLogin(null, 'lecteur');
+        });
+    }
+
+    // Bouton Accès Gestionnaire - Afficher le formulaire
+    if (managerAccessBtn) {
+        managerAccessBtn.addEventListener('click', () => {
+            if (loginActions) loginActions.style.display = 'none';
+            if (loginForm) loginForm.style.display = 'block';
+            if (accessCodeInput) {
+                setTimeout(() => accessCodeInput.focus(), 100);
+            }
+        });
+    }
+
+    // Bouton Annuler - Revenir aux boutons
+    if (cancelManagerBtn) {
+        cancelManagerBtn.addEventListener('click', () => {
+            if (loginForm) loginForm.style.display = 'none';
+            if (loginActions) loginActions.style.display = 'block';
+            if (accessCodeInput) accessCodeInput.value = '';
+            if (loginError) loginError.classList.remove('show');
+        });
+    }
+
+    // Formulaire gestionnaire
     if (loginForm) {
         loginForm.addEventListener('submit', (e) => {
             e.preventDefault();

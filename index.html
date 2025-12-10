@@ -59,15 +59,31 @@
                     <h1>Couronne de Vie</h1>
                     <p>Gestion des Recettes de Taxi</p>
                 </div>
-                <form id="loginForm">
-                    <div class="form-group">
-                        <label for="accessCode"><i class="fas fa-key"></i> Code d'accès</label>
-                        <input type="password" id="accessCode" name="accessCode" placeholder="Entrez votre code d'accès" required autofocus>
-                        <small>Codes disponibles : couronne01 (Lecteur) ou couronne02 (Gestionnaire)</small>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-sign-in-alt"></i> Se connecter
+                <!-- Bouton Mode Lecteur (accès libre) -->
+                <div class="login-actions">
+                    <button type="button" id="readerModeBtn" class="btn btn-primary btn-block btn-reader">
+                        <i class="fas fa-book-reader"></i> Mode Lecteur
                     </button>
+                    <p class="login-divider">ou</p>
+                    <button type="button" id="managerAccessBtn" class="btn btn-secondary btn-block btn-manager">
+                        <i class="fas fa-user-shield"></i> Accès Gestionnaire
+                    </button>
+                </div>
+                
+                <!-- Formulaire pour gestionnaire (caché par défaut) -->
+                <form id="loginForm" style="display: none;">
+                    <div class="form-group">
+                        <label for="accessCode"><i class="fas fa-key"></i> Code d'accès gestionnaire</label>
+                        <input type="password" id="accessCode" name="accessCode" placeholder="Entrez le code gestionnaire" required>
+                    </div>
+                    <div class="form-actions-manager">
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="fas fa-sign-in-alt"></i> Se connecter
+                        </button>
+                        <button type="button" id="cancelManagerBtn" class="btn btn-secondary btn-block">
+                            <i class="fas fa-times"></i> Annuler
+                        </button>
+                    </div>
                     <div id="loginError" class="login-error"></div>
                 </form>
             </div>
