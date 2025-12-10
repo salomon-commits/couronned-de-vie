@@ -67,6 +67,84 @@ function showApplication() {
     }
 }
 
+// Fonction pour initialiser les événements de l'application (réutilisable)
+function initializeAppEvents() {
+    // FORCER le masquage de toutes les pages au démarrage (sauf dashboard)
+    document.querySelectorAll('.view-section, .page').forEach(page => {
+        const pageId = page.getAttribute('data-page-id');
+        const pageElementId = page.id;
+        // Afficher uniquement le dashboard
+        if (pageId === 'home' || pageElementId === 'view-dashboard') {
+            page.setAttribute('style', 'display: block !important;');
+            page.classList.add('active');
+        } else {
+            // Masquer toutes les autres pages
+            page.setAttribute('style', 'display: none !important;');
+            page.classList.remove('active');
+        }
+    });
+    
+    // ✅ INITIALISER LES ÉVÉNEMENTS IMMÉDIATEMENT (NON BLOQUANT)
+    initNavigation();
+    initTaxiModal();
+    initDriverModal();
+    initAIAssistant();
+    loadDefaultValues();
+    showPage('home');
+    
+    // ✅ ATTACHER LES ÉVÉNEMENTS DES BOUTONS IMMÉDIATEMENT
+    // Gestionnaire de déconnexion
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        // Supprimer les anciens listeners pour éviter les doublons
+        const newLogoutBtn = logoutBtn.cloneNode(true);
+        logoutBtn.parentNode.replaceChild(newLogoutBtn, logoutBtn);
+        newLogoutBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            handleLogout();
+        });
+    }
+    
+    // Gestionnaire du bouton d'actualisation
+    const refreshBtn = document.getElementById('refreshDataBtn');
+    if (refreshBtn) {
+        // Supprimer les anciens listeners pour éviter les doublons
+        const newRefreshBtn = refreshBtn.cloneNode(true);
+        refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
+        
+        // Fonction d'actualisation
+        const handleRefresh = async (e) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            await refreshAllData();
+        };
+        
+        // Utiliser plusieurs méthodes pour s'assurer que l'événement fonctionne
+        newRefreshBtn.addEventListener('click', handleRefresh, { passive: false });
+        
+        // Aussi avec touchstart/touchend pour mobile/iOS
+        newRefreshBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        
+        newRefreshBtn.addEventListener('touchend', handleRefresh, { passive: false });
+        
+        // S'assurer que le bouton est cliquable
+        newRefreshBtn.style.pointerEvents = 'auto';
+        newRefreshBtn.style.cursor = 'pointer';
+        newRefreshBtn.style.touchAction = 'manipulation';
+        newRefreshBtn.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
+        
+        // Pour iOS, s'assurer que le bouton fonctionne
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+            newRefreshBtn.setAttribute('role', 'button');
+            newRefreshBtn.setAttribute('aria-label', 'Actualiser les données');
+        }
+    }
+}
+
 // Fonction pour gérer le login
 function handleLogin(code) {
     const role = ACCESS_CODES[code.toLowerCase()];
@@ -74,6 +152,20 @@ function handleLogin(code) {
         currentRole = role;
         sessionStorage.setItem('userRole', role);
         showApplication();
+        
+        // ✅ INITIALISER LES ÉVÉNEMENTS IMMÉDIATEMENT après la connexion
+        // Cela garantit que les boutons fonctionnent même si DOMContentLoaded a déjà été exécuté
+        initializeAppEvents();
+        
+        // Charger les données en arrière-plan (non bloquant)
+        fetchDataFromSupabase()
+            .then(() => {
+                console.log('✅ Données chargées après connexion');
+            })
+            .catch((error) => {
+                console.error('❌ Échec du chargement des données après connexion (non bloquant):', error);
+            });
+        
         showToast(`Connexion réussie - Mode ${role === 'lecteur' ? 'Lecteur' : 'Gestionnaire'}`, 'success');
         return true;
     }
@@ -238,7 +330,7 @@ function getSupabaseApiKey() {
 
 // Fonction helper pour faire des requêtes Supabase avec gestion d'erreur complète
 async function supabaseRequest(endpoint, options = {}) {
-    const { method = 'GET', body = null, headers = {} } = options;
+    const { method = 'GET', body = null, headers = {}, timeoutMs = 8000 } = options; // Timeout par défaut de 8 secondes
     
     const defaultHeaders = {
         'apikey': SUPABASE_CONFIG.ANON_KEY,
@@ -247,9 +339,16 @@ async function supabaseRequest(endpoint, options = {}) {
         'Prefer': 'return=representation'
     };
     
+    // Créer un AbortController pour gérer le timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+        controller.abort();
+    }, timeoutMs);
+    
     const requestOptions = {
         method,
         headers: { ...defaultHeaders, ...headers },
+        signal: controller.signal // Ajouter le signal pour l'abort
     };
     
     if (body && method !== 'GET') {
@@ -258,6 +357,9 @@ async function supabaseRequest(endpoint, options = {}) {
     
     try {
         const response = await fetch(`${SUPABASE_CONFIG.URL}/rest/v1/${endpoint}`, requestOptions);
+        
+        // Annuler le timeout si la requête réussit/échoue rapidement
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -284,6 +386,16 @@ async function supabaseRequest(endpoint, options = {}) {
         
         return await response.json();
     } catch (error) {
+        clearTimeout(timeoutId);
+        
+        // Gérer spécifiquement le timeout (si l'erreur est AbortError)
+        if (error.name === 'AbortError' || error.name === 'AbortController') {
+            const timeoutError = new Error(`Timeout réseau atteint (${timeoutMs}ms) pour ${endpoint}. La connexion est trop lente ou a échoué.`);
+            timeoutError.name = 'TimeoutError';
+            console.error(`⏱️ Timeout Supabase pour ${endpoint}:`, timeoutError);
+            throw timeoutError;
+        }
+        
         console.error(`Erreur lors de la requête Supabase (${endpoint}):`, error);
         throw error;
     }
@@ -346,22 +458,23 @@ async function fetchDataFromSupabase() {
             console.warn('⚠️ Test de connexion échoué:', testError);
         }
         
-        // Récupérer toutes les données en parallèle depuis Supabase avec gestion d'erreur
+        // Récupérer toutes les données en parallèle depuis Supabase avec gestion d'erreur et timeout
         console.log('📥 Récupération des données...');
+        const timeoutMs = 8000; // Timeout de 8 secondes par requête
         const [recipesResponse, taxisResponse, driversResponse, commentsResponse] = await Promise.all([
-            supabaseRequest('recipes?select=*&order=date.desc').catch((err) => {
+            supabaseRequest('recipes?select=*&order=date.desc', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur recipes:', err);
                 return [];
             }),
-            supabaseRequest('taxis?select=*').catch((err) => {
+            supabaseRequest('taxis?select=*', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur taxis:', err);
                 return [];
             }),
-            supabaseRequest('drivers?select=*').catch((err) => {
+            supabaseRequest('drivers?select=*', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur drivers:', err);
                 return [];
             }),
-            supabaseRequest('comments?select=*&order=month.desc').catch((err) => {
+            supabaseRequest('comments?select=*&order=month.desc', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur comments:', err);
                 return [];
             })
@@ -430,8 +543,10 @@ async function fetchDataFromSupabase() {
             errorMessage = 'Tables Supabase non trouvées. Vérifiez que le schéma SQL a été exécuté.';
         } else if (error.message && error.message.includes('403')) {
             errorMessage = 'Accès refusé (403). Vérifiez les politiques RLS dans Supabase.';
-        } else if (error.message && error.message.includes('Failed to fetch') || error.message && error.message.includes('NetworkError')) {
+        } else if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
             errorMessage = 'Erreur de connexion réseau. Vérifiez votre connexion internet.';
+        } else if (error.name === 'TimeoutError' || error.message && error.message.includes('Timeout')) {
+            errorMessage = 'Timeout de connexion. La connexion réseau est trop lente. Réessayez plus tard.';
         }
         
         showToast(errorMessage, 'error');
@@ -4388,83 +4503,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         const receptionEnabled = await getSetting('dataReceptionEnabled') || false;
         dataReceptionEnabled = receptionEnabled;
         
-        // Charger les données depuis Supabase (priorité absolue)
-        // En mode PWA, on force toujours l'utilisation de Supabase
-        const supabaseSuccess = await fetchDataFromSupabase();
+        // ============================================================
+        // 🚀 CORRECTION CRITIQUE : ATTACHER LES ÉVÉNEMENTS EN PREMIER
+        // Les boutons doivent être fonctionnels AVANT le chargement des données
+        // ============================================================
         
-        // Si Supabase échoue en mode PWA, afficher un message clair
-        if (!supabaseSuccess) {
-            const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-            if (isPWA) {
-                console.warn('⚠️ Mode PWA détecté - Supabase est requis pour fonctionner correctement');
-            }
-        }
+        // ✅ INITIALISER LES ÉVÉNEMENTS IMMÉDIATEMENT (NON BLOQUANT)
+        // Utiliser la fonction réutilisable initializeAppEvents()
+        initializeAppEvents();
         
-        // FORCER le masquage de toutes les pages au démarrage (sauf dashboard)
-        document.querySelectorAll('.view-section, .page').forEach(page => {
-            const pageId = page.getAttribute('data-page-id');
-            const pageElementId = page.id;
-            // Afficher uniquement le dashboard
-            if (pageId === 'home' || pageElementId === 'view-dashboard') {
-                page.setAttribute('style', 'display: block !important;');
-                page.classList.add('active');
-            } else {
-                // Masquer toutes les autres pages
-                page.setAttribute('style', 'display: none !important;');
-                page.classList.remove('active');
-            }
-        });
-        
-        initNavigation();
-        initTaxiModal();
-        initDriverModal();
-        initAIAssistant();
-        loadDefaultValues();
-        showPage('home');
-        
-        // Gestionnaire de déconnexion
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                handleLogout();
-            });
-        }
-        
-        // Gestionnaire du bouton d'actualisation
-        const refreshBtn = document.getElementById('refreshDataBtn');
-        if (refreshBtn) {
-            // Fonction d'actualisation
-            const handleRefresh = async (e) => {
-                if (e) {
-                    e.preventDefault();
-                    e.stopPropagation();
+        // ============================================================
+        // 📥 CHARGER LES DONNÉES EN ARRIÈRE-PLAN (NON BLOQUANT)
+        // Ne pas utiliser 'await' pour ne pas bloquer l'interface
+        // ============================================================
+        fetchDataFromSupabase()
+            .then((supabaseSuccess) => {
+                // Si Supabase échoue en mode PWA, afficher un message clair
+                if (!supabaseSuccess) {
+                    const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                    if (isPWA) {
+                        console.warn('⚠️ Mode PWA détecté - Supabase est requis pour fonctionner correctement');
+                    }
                 }
-                await refreshAllData();
-            };
-            
-            // Utiliser plusieurs méthodes pour s'assurer que l'événement fonctionne
-            refreshBtn.addEventListener('click', handleRefresh, { passive: false });
-            
-            // Aussi avec touchstart/touchend pour mobile/iOS
-            refreshBtn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-            }, { passive: false });
-            
-            refreshBtn.addEventListener('touchend', handleRefresh, { passive: false });
-            
-            // S'assurer que le bouton est cliquable
-            refreshBtn.style.pointerEvents = 'auto';
-            refreshBtn.style.cursor = 'pointer';
-            refreshBtn.style.touchAction = 'manipulation';
-            refreshBtn.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
-            
-            // Pour iOS, s'assurer que le bouton fonctionne
-            if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
-                refreshBtn.setAttribute('role', 'button');
-                refreshBtn.setAttribute('aria-label', 'Actualiser les données');
-            }
-        }
+                console.log('✅ Données chargées en arrière-plan depuis Supabase');
+            })
+            .catch((error) => {
+                // Gérer l'échec du chargement sans bloquer l'UI
+                console.error('❌ Échec du chargement des données Supabase (non bloquant):', error);
+                const isPWA = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                if (isPWA) {
+                    console.warn('⚠️ Mode PWA détecté - Supabase est requis pour fonctionner correctement');
+                }
+            });
         
         // Ajouter un bouton de rechargement forcé si on est en mode standalone (PWA)
         if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
