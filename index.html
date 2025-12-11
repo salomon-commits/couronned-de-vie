@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Couronne de Vie" />
-    <meta name="description" content="Application de gestion des recettes de taxi" />
+    <meta name="description" content="Application complète de gestion des recettes, dépenses et suivi des taxis" />
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="icon-192.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
@@ -98,6 +98,7 @@
     <input type="radio" name="nav" id="nav-stats" hidden>
     <input type="radio" name="nav" id="nav-taxis" hidden>
     <input type="radio" name="nav" id="nav-drivers" hidden>
+    <input type="radio" name="nav" id="nav-expenses" hidden>
     <input type="radio" name="nav" id="nav-report" hidden>
     <input type="radio" name="nav" id="nav-ai" hidden>
     <input type="radio" name="nav" id="nav-settings" hidden>
@@ -149,6 +150,11 @@
             <span class="font-medium">Chauffeurs</span>
           </label>
 
+          <label for="nav-expenses" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="expenses">
+            <i class="fa-solid fa-money-bill-wave w-5 text-center"></i>
+            <span class="font-medium">Dépenses</span>
+          </label>
+
           <div class="pt-4 pb-1 role-gestionnaire">
             <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Analyse</p>
           </div>
@@ -184,9 +190,15 @@
           </div>
           <span class="font-bold">Couronne de Vie</span>
         </div>
-        <button id="navToggle" class="text-white p-2 hover:bg-slate-800 rounded transition-colors">
-          <i class="fa-solid fa-bars text-xl"></i>
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="refreshDataBtnMobile" class="text-white p-2 hover:bg-slate-800 rounded transition-colors relative" title="Actualiser les données">
+            <i class="fa-solid fa-rotate text-lg"></i>
+            <span class="absolute top-0 right-0 w-2 h-2 bg-green-500 rounded-full border border-slate-900"></span>
+          </button>
+          <button id="navToggle" class="text-white p-2 hover:bg-slate-800 rounded transition-colors">
+            <i class="fa-solid fa-bars text-xl"></i>
+          </button>
+        </div>
       </div>
 
       <!-- MOBILE MENU -->
@@ -226,6 +238,11 @@
             <span class="font-medium">Chauffeurs</span>
           </label>
 
+          <label for="nav-expenses" class="nav-link nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="expenses">
+            <i class="fa-solid fa-money-bill-wave w-5 text-center"></i>
+            <span class="font-medium">Dépenses</span>
+          </label>
+
           <div class="pt-4 pb-1 role-gestionnaire">
             <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Analyse</p>
           </div>
@@ -256,8 +273,8 @@
       <!-- MAIN CONTENT AREA -->
       <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 pt-16 md:pt-0">
         
-        <!-- TOP HEADER (Common) -->
-        <header class="bg-white shadow-sm sticky top-0 z-10 px-6 py-4 flex justify-between items-center">
+        <!-- TOP HEADER (Desktop only) -->
+        <header class="hidden md:flex bg-white shadow-sm sticky top-0 z-10 px-6 py-4 justify-between items-center">
           <div>
             <h2 class="text-xl font-bold text-slate-800 page-title">Tableau de bord</h2>
             <p class="text-sm text-slate-500">Aperçu de l'activité du jour</p>
@@ -290,52 +307,120 @@
           <!-- ============================ -->
           <div id="view-dashboard" class="view-section">
             <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <p class="text-sm font-medium text-slate-500">Recettes Aujourd'hui</p>
-                    <h3 class="text-2xl font-bold text-slate-800 mt-1" id="todayTotal">0 FCFA</h3>
+            <div class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-6 mb-4 md:mb-8">
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Recettes Aujourd'hui</p>
+                    <h3 class="text-base md:text-2xl font-bold text-slate-800 mt-1 truncate" id="todayTotal">0 FCFA</h3>
                   </div>
-                  <div class="p-2 bg-blue-50 text-brand-600 rounded-lg">
-                    <i class="fa-solid fa-wallet text-lg"></i>
-                  </div>
-                </div>
-              </div>
-
-              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <p class="text-sm font-medium text-slate-500">Total Déficits</p>
-                    <h3 class="text-2xl font-bold text-red-600 mt-1" id="totalDeficit">0 FCFA</h3>
-                  </div>
-                  <div class="p-2 bg-red-50 text-red-600 rounded-lg">
-                    <i class="fa-solid fa-circle-exclamation text-lg"></i>
+                  <div class="p-1.5 md:p-2 bg-blue-50 text-brand-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-wallet text-sm md:text-lg"></i>
                   </div>
                 </div>
               </div>
 
-              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <p class="text-sm font-medium text-slate-500">Total Surplus</p>
-                    <h3 class="text-2xl font-bold text-emerald-600 mt-1" id="totalSurplus">0 FCFA</h3>
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Total Déficits</p>
+                    <h3 class="text-base md:text-2xl font-bold text-red-600 mt-1 truncate" id="totalDeficit">0 FCFA</h3>
                   </div>
-                  <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-                    <i class="fa-solid fa-sack-dollar text-lg"></i>
+                  <div class="p-1.5 md:p-2 bg-red-50 text-red-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-circle-exclamation text-sm md:text-lg"></i>
                   </div>
                 </div>
               </div>
 
-              <div class="bg-white rounded-xl p-6 shadow-sm border border-slate-100">
-                <div class="flex justify-between items-start mb-4">
-                  <div>
-                    <p class="text-sm font-medium text-slate-500">Taxis Actifs</p>
-                    <h3 class="text-2xl font-bold text-slate-800 mt-1" id="activeTaxis">0 / 0</h3>
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Total Surplus</p>
+                    <h3 class="text-base md:text-2xl font-bold text-emerald-600 mt-1 truncate" id="totalSurplus">0 FCFA</h3>
                   </div>
-                  <div class="p-2 bg-purple-50 text-purple-600 rounded-lg">
-                    <i class="fa-solid fa-car text-lg"></i>
+                  <div class="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-sack-dollar text-sm md:text-lg"></i>
                   </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Taxis Actifs</p>
+                    <h3 class="text-base md:text-2xl font-bold text-slate-800 mt-1 truncate" id="activeTaxis">0 / 0</h3>
+                  </div>
+                  <div class="p-1.5 md:p-2 bg-purple-50 text-purple-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-car text-sm md:text-lg"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cartes Statistiques Hebdomadaires et Mensuelles -->
+            <div class="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-6 mb-4 md:mb-8">
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Recettes Cette Semaine</p>
+                    <h3 class="text-base md:text-2xl font-bold text-slate-800 mt-1 truncate" id="weekTotal">0 FCFA</h3>
+                    <p class="text-xs text-slate-400 mt-1 hidden md:block" id="weekInfo">Semaine en cours</p>
+                  </div>
+                  <div class="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-calendar-week text-sm md:text-lg"></i>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-white rounded-lg md:rounded-xl p-3 md:p-6 shadow-sm border border-slate-100">
+                <div class="flex justify-between items-start mb-2 md:mb-4">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs md:text-sm font-medium text-slate-500 truncate">Recettes Ce Mois</p>
+                    <h3 class="text-base md:text-2xl font-bold text-slate-800 mt-1 truncate" id="monthTotal">0 FCFA</h3>
+                    <p class="text-xs text-slate-400 mt-1 hidden md:block" id="monthInfo">Mois en cours</p>
+                  </div>
+                  <div class="p-1.5 md:p-2 bg-cyan-50 text-cyan-600 rounded-lg flex-shrink-0 ml-2">
+                    <i class="fa-solid fa-calendar-days text-sm md:text-lg"></i>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section Taxis sans Recette Aujourd'hui -->
+            <div class="mb-8">
+              <h3 class="text-lg font-bold text-slate-800 mb-4">
+                <i class="fa-solid fa-exclamation-circle text-orange-600 mr-2"></i>Taxis sans Recette Aujourd'hui
+              </h3>
+              <div id="noRecipeTodayContainer" class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-4 mb-4 md:mb-6">
+                <div class="text-center py-8 text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                  <p>Chargement des données...</p>
+                </div>
+              </div>
+              
+              <!-- Résumé des jours non versés -->
+              <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                <h4 class="text-md font-bold text-slate-800 mb-4">
+                  <i class="fa-solid fa-calendar-days text-brand-600 mr-2"></i>Résumé des Jours Non Versés
+                </h4>
+                <div id="unpaidDaysSummary" class="overflow-x-auto">
+                  <div class="text-center py-8 text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p>Chargement...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section Taxis en Retard -->
+            <div class="mb-8">
+              <h3 class="text-lg font-bold text-slate-800 mb-4">
+                <i class="fa-solid fa-triangle-exclamation text-red-600 mr-2"></i>Taxis en Retard
+              </h3>
+              <div id="delayedTaxisContainer" class="grid grid-cols-2 md:grid-cols-2 gap-2 md:gap-4">
+                <div class="text-center py-8 text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                  <p>Chargement des données...</p>
                 </div>
               </div>
             </div>
@@ -497,8 +582,83 @@
               </div>
 
               <!-- Cartes pour mobile -->
-              <div class="md:hidden p-4 space-y-4" id="recipesCardsContainer">
+              <div class="md:hidden p-2 space-y-2" id="recipesCardsContainer">
                 <div class="text-center py-8 text-slate-400">Aucune recette enregistrée</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================ -->
+          <!-- VIEW: EXPENSES -->
+          <!-- ============================ -->
+          <div id="view-expenses" class="view-section">
+            <div class="flex justify-between items-center mb-6">
+              <h3 class="font-bold text-lg text-slate-800">Gestion des Dépenses</h3>
+              <button id="addExpenseBtn" class="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 shadow-sm role-gestionnaire">
+                <i class="fa-solid fa-plus mr-2"></i>Nouvelle Dépense
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 mb-1">Total Ce Mois</p>
+                <h3 class="text-2xl font-bold text-slate-800" id="expensesMonthTotal">0 FCFA</h3>
+              </div>
+              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 mb-1">Garage</p>
+                <h3 class="text-2xl font-bold text-orange-600" id="expensesGarageTotal">0 FCFA</h3>
+              </div>
+              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 mb-1">Assurance</p>
+                <h3 class="text-2xl font-bold text-blue-600" id="expensesAssuranceTotal">0 FCFA</h3>
+              </div>
+              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 mb-1">Autres</p>
+                <h3 class="text-2xl font-bold text-purple-600" id="expensesOtherTotal">0 FCFA</h3>
+              </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+              <div class="p-4 border-b border-slate-100 bg-slate-50/50">
+                <div class="flex flex-col md:flex-row gap-4">
+                  <select id="filterExpenseTaxi" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
+                    <option value="">Tous les taxis</option>
+                  </select>
+                  <select id="filterExpenseType" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
+                    <option value="">Tous les types</option>
+                    <option value="garage">Garage</option>
+                    <option value="assurance">Assurance</option>
+                    <option value="pneu">Pneu</option>
+                    <option value="vidange">Vidange</option>
+                    <option value="carburant">Carburant</option>
+                    <option value="reparation">Réparation</option>
+                    <option value="autre">Autre</option>
+                  </select>
+                  <input type="date" id="filterExpenseDate" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
+                  <button id="clearExpenseFilters" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50">
+                    <i class="fa-solid fa-times mr-2"></i>Effacer
+                  </button>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                  <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
+                    <tr>
+                      <th class="p-4">Date</th>
+                      <th class="p-4">Matricule</th>
+                      <th class="p-4">Type</th>
+                      <th class="p-4">Description</th>
+                      <th class="p-4 text-right">Montant</th>
+                      <th class="p-4 text-center role-gestionnaire">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100" id="expensesTableBody">
+                    <tr>
+                      <td colspan="6" class="text-center py-8 text-slate-400">Aucune dépense enregistrée</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -538,6 +698,32 @@
                     <i class="fa-solid fa-users text-3xl mb-2"></i>
                     <p>Aucune donnée disponible</p>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Statistiques par Semaine -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6">
+              <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">
+                <i class="fa-solid fa-calendar-week text-brand-600 mr-2"></i>Recettes par Semaine (12 dernières semaines)
+              </h4>
+              <div id="weeklyStatsContainer">
+                <div class="text-center py-8 text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                  <p>Chargement des données...</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Statistiques par Mois -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100 mb-6">
+              <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">
+                <i class="fa-solid fa-calendar-days text-brand-600 mr-2"></i>Recettes par Mois (12 derniers mois)
+              </h4>
+              <div id="monthlyStatsContainer">
+                <div class="text-center py-8 text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                  <p>Chargement des données...</p>
                 </div>
               </div>
             </div>
@@ -824,6 +1010,20 @@
     <!-- Puter.js supprimé - L'assistant IA fonctionne en mode local -->
     
     <!-- Modales -->
+    <!-- Modal Détails Recette -->
+    <div id="recipeDetailModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="recipeDetailModalTitle">Détails de la Recette</h2>
+            <div id="recipeDetailModalContent" class="recipe-detail-content">
+                <div class="text-center py-8 text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p>Chargement...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Taxi -->
     <div id="taxiModal" class="modal">
         <div class="modal-content">
@@ -844,6 +1044,115 @@
                     <input type="text" id="taxiProprietaire" value="COURONNE DE VIE" readonly required>
                     <small style="color: #666; font-size: 0.9rem;">Tous les véhicules appartiennent à l'entreprise COURONNE DE VIE</small>
                 </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary close-modal">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Dépense -->
+    <div id="expenseModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="expenseModalTitle">Ajouter une Dépense</h2>
+            <form id="expenseForm">
+                <input type="hidden" id="expenseId">
+                <div class="form-group">
+                    <label>Matricule *</label>
+                    <select id="expenseMatricule" required>
+                        <option value="">Sélectionner un taxi</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" id="expenseDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Type de Dépense *</label>
+                    <select id="expenseType" required>
+                        <option value="">Sélectionner un type</option>
+                        <option value="garage">Garage</option>
+                        <option value="assurance">Assurance</option>
+                        <option value="pneu">Pneu</option>
+                        <option value="vidange">Vidange</option>
+                        <option value="carburant">Carburant</option>
+                        <option value="reparation">Réparation</option>
+                        <option value="autre">Autre</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="expenseDescription" rows="3" placeholder="Détails de la dépense..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Montant (FCFA) *</label>
+                    <input type="number" id="expenseAmount" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Fournisseur/Prestataire</label>
+                    <input type="text" id="expenseProvider" placeholder="Nom du garage, assurance...">
+                </div>
+                <div class="form-group">
+                    <label>Numéro de Facture</label>
+                    <input type="text" id="expenseInvoiceNumber" placeholder="N° facture...">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary close-modal">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Signalement Taxi sans Recette -->
+    <div id="missingRecipeModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="missingRecipeModalTitle">Signaler Taxi sans Recette</h2>
+            <form id="missingRecipeForm">
+                <input type="hidden" id="missingRecipeTaxiId">
+                <input type="hidden" id="missingRecipeMatricule">
+                <input type="hidden" id="missingRecipeDate">
+                
+                <div class="form-group">
+                    <label>Matricule</label>
+                    <input type="text" id="missingRecipeTaxiMatricule" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Marque</label>
+                    <input type="text" id="missingRecipeTaxiMarque" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Date</label>
+                    <input type="date" id="missingRecipeTaxiDate" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Montant Attendu (FCFA) *</label>
+                    <div class="flex gap-2 mt-2">
+                        <button type="button" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors amount-btn" data-amount="9000">
+                            9 000 FCFA
+                        </button>
+                        <button type="button" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors amount-btn" data-amount="12000">
+                            12 000 FCFA
+                        </button>
+                        <button type="button" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors amount-btn" data-amount="15000">
+                            15 000 FCFA
+                        </button>
+                    </div>
+                    <input type="hidden" id="missingRecipeAmount" required>
+                    <small class="text-slate-500 mt-2 block">Sélectionnez le montant que le taxi devait normalement verser</small>
+                </div>
+                
+                <div class="form-group">
+                    <label>Raison (optionnel)</label>
+                    <textarea id="missingRecipeReason" rows="3" placeholder="Ex: Taxi en panne, chauffeur absent..."></textarea>
+                </div>
+                
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Enregistrer</button>
                     <button type="button" class="btn btn-secondary close-modal">Annuler</button>

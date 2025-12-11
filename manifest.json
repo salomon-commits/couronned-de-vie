@@ -1,7 +1,7 @@
 {
   "name": "Couronne de Vie - Gestion Taxis",
   "short_name": "Couronne de Vie",
-  "description": "Application de gestion des recettes de taxi",
+  "description": "Application complète de gestion des recettes, dépenses et suivi des taxis",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -28,8 +28,15 @@
       "purpose": "any"
     }
   ],
-  "categories": ["business", "productivity"],
+  "categories": ["business", "productivity", "finance"],
   "shortcuts": [
+    {
+      "name": "Tableau de bord",
+      "short_name": "Dashboard",
+      "description": "Voir le tableau de bord",
+      "url": "/?page=home",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Ajouter Recette",
       "short_name": "Ajouter",
@@ -42,6 +49,20 @@
       "short_name": "Liste",
       "description": "Voir toutes les recettes",
       "url": "/?page=list-recipes",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dépenses",
+      "short_name": "Dépenses",
+      "description": "Gérer les dépenses",
+      "url": "/?page=expenses",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Statistiques",
+      "short_name": "Stats",
+      "description": "Voir les statistiques",
+      "url": "/?page=statistics",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ]

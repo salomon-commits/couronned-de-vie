@@ -140,6 +140,9 @@ header.bg-white {
 #nav-drivers:checked ~ div #view-drivers {
     display: block !important;
 }
+#nav-expenses:checked ~ div #view-expenses {
+    display: block !important;
+}
 #nav-report:checked ~ div #view-report {
     display: block !important;
 }
@@ -157,6 +160,7 @@ header.bg-white {
 #nav-dashboard:checked ~ div #view-stats,
 #nav-dashboard:checked ~ div #view-taxis,
 #nav-dashboard:checked ~ div #view-drivers,
+#nav-dashboard:checked ~ div #view-expenses,
 #nav-dashboard:checked ~ div #view-report,
 #nav-dashboard:checked ~ div #view-ai,
 #nav-dashboard:checked ~ div #view-settings {
@@ -168,6 +172,7 @@ header.bg-white {
 #nav-add:checked ~ div #view-stats,
 #nav-add:checked ~ div #view-taxis,
 #nav-add:checked ~ div #view-drivers,
+#nav-add:checked ~ div #view-expenses,
 #nav-add:checked ~ div #view-report,
 #nav-add:checked ~ div #view-ai,
 #nav-add:checked ~ div #view-settings {
@@ -179,6 +184,7 @@ header.bg-white {
 #nav-list:checked ~ div #view-stats,
 #nav-list:checked ~ div #view-taxis,
 #nav-list:checked ~ div #view-drivers,
+#nav-list:checked ~ div #view-expenses,
 #nav-list:checked ~ div #view-report,
 #nav-list:checked ~ div #view-ai,
 #nav-list:checked ~ div #view-settings {
@@ -190,6 +196,7 @@ header.bg-white {
 #nav-stats:checked ~ div #view-list,
 #nav-stats:checked ~ div #view-taxis,
 #nav-stats:checked ~ div #view-drivers,
+#nav-stats:checked ~ div #view-expenses,
 #nav-stats:checked ~ div #view-report,
 #nav-stats:checked ~ div #view-ai,
 #nav-stats:checked ~ div #view-settings {
@@ -201,6 +208,7 @@ header.bg-white {
 #nav-taxis:checked ~ div #view-list,
 #nav-taxis:checked ~ div #view-stats,
 #nav-taxis:checked ~ div #view-drivers,
+#nav-taxis:checked ~ div #view-expenses,
 #nav-taxis:checked ~ div #view-report,
 #nav-taxis:checked ~ div #view-ai,
 #nav-taxis:checked ~ div #view-settings {
@@ -212,6 +220,7 @@ header.bg-white {
 #nav-drivers:checked ~ div #view-list,
 #nav-drivers:checked ~ div #view-stats,
 #nav-drivers:checked ~ div #view-taxis,
+#nav-drivers:checked ~ div #view-expenses,
 #nav-drivers:checked ~ div #view-report,
 #nav-drivers:checked ~ div #view-ai,
 #nav-drivers:checked ~ div #view-settings {
@@ -224,6 +233,7 @@ header.bg-white {
 #nav-report:checked ~ div #view-stats,
 #nav-report:checked ~ div #view-taxis,
 #nav-report:checked ~ div #view-drivers,
+#nav-report:checked ~ div #view-expenses,
 #nav-report:checked ~ div #view-ai,
 #nav-report:checked ~ div #view-settings {
     display: none !important;
@@ -235,6 +245,7 @@ header.bg-white {
 #nav-ai:checked ~ div #view-stats,
 #nav-ai:checked ~ div #view-taxis,
 #nav-ai:checked ~ div #view-drivers,
+#nav-ai:checked ~ div #view-expenses,
 #nav-ai:checked ~ div #view-report,
 #nav-ai:checked ~ div #view-settings {
     display: none !important;
@@ -246,6 +257,7 @@ header.bg-white {
 #nav-settings:checked ~ div #view-stats,
 #nav-settings:checked ~ div #view-taxis,
 #nav-settings:checked ~ div #view-drivers,
+#nav-settings:checked ~ div #view-expenses,
 #nav-settings:checked ~ div #view-report,
 #nav-settings:checked ~ div #view-ai {
     display: none !important;
@@ -263,6 +275,7 @@ header.bg-white {
 #nav-stats:checked ~ div aside label[for="nav-stats"],
 #nav-taxis:checked ~ div aside label[for="nav-taxis"],
 #nav-drivers:checked ~ div aside label[for="nav-drivers"],
+#nav-expenses:checked ~ div aside label[for="nav-expenses"],
 #nav-report:checked ~ div aside label[for="nav-report"],
 #nav-ai:checked ~ div aside label[for="nav-ai"],
 #nav-settings:checked ~ div aside label[for="nav-settings"] {
@@ -507,6 +520,32 @@ input[type=number] {
     overflow-y: auto;
     position: relative;
     animation: slideUp 0.3s ease;
+}
+
+.recipe-detail-content {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 1rem 0;
+}
+
+.recipe-detail-content .space-y-4 > * + * {
+    margin-top: 1rem;
+}
+
+.recipe-detail-content .space-y-3 > * + * {
+    margin-top: 0.75rem;
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        width: 95%;
+        padding: 1.5rem;
+        max-height: 85vh;
+    }
+    
+    .recipe-detail-content {
+        max-height: 55vh;
+    }
 }
 
 .modal .close {

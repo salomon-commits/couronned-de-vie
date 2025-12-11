@@ -85,6 +85,9 @@ function initializeAppEvents() {
     initNavigation();
     initTaxiModal();
     initDriverModal();
+    initMissingRecipeModal();
+    initExpenseModal();
+    initRecipeDetailModal();
     initAIAssistant();
     loadDefaultValues();
     showPage('home');
@@ -102,42 +105,58 @@ function initializeAppEvents() {
         });
     }
     
-    // Gestionnaire du bouton d'actualisation
+    // Fonction d'actualisation réutilisable
+    const handleRefresh = async (e) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        await refreshAllData();
+    };
+    
+    // Gestionnaire du bouton d'actualisation (desktop)
     const refreshBtn = document.getElementById('refreshDataBtn');
     if (refreshBtn) {
-        // Supprimer les anciens listeners pour éviter les doublons
         const newRefreshBtn = refreshBtn.cloneNode(true);
         refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
         
-        // Fonction d'actualisation
-        const handleRefresh = async (e) => {
-            if (e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            await refreshAllData();
-        };
-        
-        // Utiliser plusieurs méthodes pour s'assurer que l'événement fonctionne
         newRefreshBtn.addEventListener('click', handleRefresh, { passive: false });
-        
-        // Aussi avec touchstart/touchend pour mobile/iOS
         newRefreshBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
         }, { passive: false });
-        
         newRefreshBtn.addEventListener('touchend', handleRefresh, { passive: false });
         
-        // S'assurer que le bouton est cliquable
         newRefreshBtn.style.pointerEvents = 'auto';
         newRefreshBtn.style.cursor = 'pointer';
         newRefreshBtn.style.touchAction = 'manipulation';
         newRefreshBtn.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
         
-        // Pour iOS, s'assurer que le bouton fonctionne
         if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
             newRefreshBtn.setAttribute('role', 'button');
             newRefreshBtn.setAttribute('aria-label', 'Actualiser les données');
+        }
+    }
+    
+    // Gestionnaire du bouton d'actualisation (mobile)
+    const refreshBtnMobile = document.getElementById('refreshDataBtnMobile');
+    if (refreshBtnMobile) {
+        const newRefreshBtnMobile = refreshBtnMobile.cloneNode(true);
+        refreshBtnMobile.parentNode.replaceChild(newRefreshBtnMobile, refreshBtnMobile);
+        
+        newRefreshBtnMobile.addEventListener('click', handleRefresh, { passive: false });
+        newRefreshBtnMobile.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+        newRefreshBtnMobile.addEventListener('touchend', handleRefresh, { passive: false });
+        
+        newRefreshBtnMobile.style.pointerEvents = 'auto';
+        newRefreshBtnMobile.style.cursor = 'pointer';
+        newRefreshBtnMobile.style.touchAction = 'manipulation';
+        newRefreshBtnMobile.style.webkitTapHighlightColor = 'rgba(59, 130, 246, 0.3)';
+        
+        if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+            newRefreshBtnMobile.setAttribute('role', 'button');
+            newRefreshBtnMobile.setAttribute('aria-label', 'Actualiser les données');
         }
     }
 }
@@ -425,7 +444,9 @@ let allData = {
     recipes: [],
     taxis: [],
     drivers: [],
-    comments: []
+    comments: [],
+    unpaidDays: [],
+    expenses: []
 };
 
 // Fonction pour récupérer les données depuis Supabase
@@ -480,7 +501,7 @@ async function fetchDataFromSupabase() {
         // Récupérer toutes les données en parallèle depuis Supabase avec gestion d'erreur et timeout
         console.log('📥 Récupération des données...');
         const timeoutMs = 8000; // Timeout de 8 secondes par requête
-        const [recipesResponse, taxisResponse, driversResponse, commentsResponse] = await Promise.all([
+        const [recipesResponse, taxisResponse, driversResponse, commentsResponse, unpaidDaysResponse, expensesResponse] = await Promise.all([
             supabaseRequest('recipes?select=*&order=date.desc', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur recipes:', err);
                 return [];
@@ -496,6 +517,14 @@ async function fetchDataFromSupabase() {
             supabaseRequest('comments?select=*&order=month.desc', { timeoutMs }).catch((err) => {
                 console.error('❌ Erreur comments:', err);
                 return [];
+            }),
+            supabaseRequest('unpaid_days?select=*&order=date.desc', { timeoutMs }).catch((err) => {
+                console.error('❌ Erreur unpaid_days:', err);
+                return [];
+            }),
+            supabaseRequest('expenses?select=*&order=date.desc', { timeoutMs }).catch((err) => {
+                console.error('❌ Erreur expenses:', err);
+                return [];
             })
         ]);
         
@@ -503,7 +532,9 @@ async function fetchDataFromSupabase() {
             recipes: recipesResponse?.length || 0,
             taxis: taxisResponse?.length || 0,
             drivers: driversResponse?.length || 0,
-            comments: commentsResponse?.length || 0
+            comments: commentsResponse?.length || 0,
+            unpaidDays: unpaidDaysResponse?.length || 0,
+            expenses: expensesResponse?.length || 0
         });
         
         // Transformer les données au format de l'application
@@ -538,6 +569,28 @@ async function fetchDataFromSupabase() {
             month: c.month || '',
             comments: c.comments || '',
             dateCreation: c.date_creation || ''
+        })) : [];
+        
+        allData.unpaidDays = Array.isArray(unpaidDaysResponse) ? unpaidDaysResponse.map(u => ({
+            id: u.id,
+            matricule: u.matricule,
+            date: u.date,
+            amount: parseFloat(u.amount) || 0,
+            reason: u.reason || '',
+            createdAt: u.created_at || ''
+        })) : [];
+        
+        allData.expenses = Array.isArray(expensesResponse) ? expensesResponse.map(e => ({
+            id: e.id,
+            matricule: e.matricule,
+            date: e.date,
+            type: e.type || 'autre',
+            description: e.description || '',
+            amount: parseFloat(e.amount) || 0,
+            provider: e.provider || '',
+            invoiceNumber: e.invoice_number || '',
+            receiptUrl: e.receipt_url || '',
+            createdAt: e.created_at || ''
         })) : [];
         
         // Synchroniser avec IndexedDB uniquement comme backup (pas comme source principale)
@@ -703,6 +756,11 @@ function initDB() {
             }
 
             // Store pour les commentaires de rapport
+            if (!db.objectStoreNames.contains('unpaidDays')) {
+                const unpaidDaysStore = db.createObjectStore('unpaidDays', { keyPath: 'id', autoIncrement: true });
+                unpaidDaysStore.createIndex('matricule', 'matricule', { unique: false });
+                unpaidDaysStore.createIndex('date', 'date', { unique: false });
+            }
             if (!db.objectStoreNames.contains('reportComments')) {
                 db.createObjectStore('reportComments', { keyPath: 'month' });
             }
@@ -831,6 +889,7 @@ function initNavigation() {
                 'nav-stats': 'statistics',
                 'nav-taxis': 'taxis',
                 'nav-drivers': 'drivers',
+                'nav-expenses': 'expenses',
                 'nav-report': 'report',
                 'nav-ai': 'ai-assistant',
                 'nav-settings': 'settings'
@@ -874,6 +933,7 @@ function showPage(pageId) {
         'list-recipes': 'view-list',
         'statistics': 'view-stats',
         'stats': 'view-stats',
+        'expenses': 'view-expenses',
         'taxis': 'view-taxis',
         'drivers': 'view-drivers',
         'report': 'view-report',
@@ -932,11 +992,18 @@ function showPage(pageId) {
         case 'statistics':
             loadStatistics();
             break;
+        case 'expenses':
+            loadExpensesList();
+            break;
         case 'ai-assistant':
             loadAIAssistantPage();
             break;
         case 'taxis':
             loadTaxisList();
+            // ✅ Réinitialiser le modal taxi quand on affiche la page taxis
+            setTimeout(() => {
+                initTaxiModal();
+            }, 200);
             break;
         case 'drivers':
             loadDriversList();
@@ -955,6 +1022,11 @@ function showPage(pageId) {
         setTimeout(() => {
             setupReadOnlyMode();
         }, 100);
+    }
+    
+    // Charger les données pour les pages accessibles aux lecteurs
+    if (pageId === 'expenses' && currentRole === 'lecteur') {
+        loadExpensesList();
     }
 }
 
@@ -1736,102 +1808,225 @@ function updateSortIcons() {
 }
 
 // Détail d'une recette
-async function showRecipeDetail(id) {
+async function showRecipeDetailModal(id) {
     const recipe = await getRecipe(id);
-    if (!recipe) return;
+    if (!recipe) {
+        showToast('Recette introuvable', 'error');
+        return;
+    }
 
-    const difference = recipe.montantVerse - recipe.recetteNormale;
+    const modal = document.getElementById('recipeDetailModal');
+    const content = document.getElementById('recipeDetailModalContent');
+    if (!modal || !content) {
+        showToast('Erreur: modal introuvable', 'error');
+        return;
+    }
+
+    const difference = parseFloat(recipe.montantVerse) - parseFloat(recipe.recetteNormale);
     let badgeClass = 'correct';
     let badgeText = 'Correct';
+    let badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
 
     if (difference < 0) {
         badgeClass = 'deficit';
         badgeText = 'Déficit';
+        badgeColor = 'bg-red-100 text-red-800 border-red-300';
     } else if (difference > 0) {
         badgeClass = 'surplus';
         badgeText = 'Surplus';
+        badgeColor = 'bg-green-100 text-green-800 border-green-300';
     }
 
-    // Vérifier si l'élément existe avant de le modifier
-    const content = document.getElementById('recipeDetailContent');
-    if (!content) {
-        // Si la page de détail n'existe pas, afficher les détails dans une modal ou un toast
-        const detailText = `
-Matricule: ${recipe.matricule}
-Date: ${new Date(recipe.date).toLocaleDateString('fr-FR')}
-Recette normale: ${recipe.recetteNormale.toLocaleString()} FCFA
-Montant versé: ${recipe.montantVerse.toLocaleString()} FCFA
-Résultat: ${badgeText} (${Math.abs(difference).toLocaleString()} FCFA)
-Chauffeur: ${recipe.chauffeur}
-Type de course: ${recipe.typeCourse || 'Non spécifié'}
-Remarques: ${recipe.remarques || 'Aucune remarque'}
-        `.trim();
-        
-        // Afficher dans une alert ou utiliser editRecipe directement
-        if (currentRole === 'gestionnaire') {
-            if (confirm(`Détails de la recette:\n\n${detailText}\n\nVoulez-vous modifier cette recette?`)) {
-                editRecipe(id);
-            }
-        } else {
-            alert(`Détails de la recette:\n\n${detailText}`);
+    let dateStr = 'N/A';
+    try {
+        if (recipe.date) {
+            dateStr = new Date(recipe.date).toLocaleDateString('fr-FR', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+            });
         }
-        return;
+    } catch (error) {
+        console.warn('Erreur formatage date:', error);
     }
-    
+
     content.innerHTML = `
-        <div class="detail-item">
-            <label>Matricule</label>
-            <p>${recipe.matricule}</p>
-        </div>
-        <div class="detail-item">
-            <label>Date</label>
-            <p>${new Date(recipe.date).toLocaleDateString('fr-FR')}</p>
-        </div>
-        <div class="detail-item">
-            <label>Recette normale</label>
-            <p>${recipe.recetteNormale.toLocaleString()} FCFA</p>
-        </div>
-        <div class="detail-item">
-            <label>Montant versé</label>
-            <p>${recipe.montantVerse.toLocaleString()} FCFA</p>
-        </div>
-        <div class="detail-item">
-            <label>Résultat</label>
-            <p><span class="badge ${badgeClass}">${badgeText}</span> ${Math.abs(difference).toLocaleString()} FCFA</p>
-        </div>
-        <div class="detail-item">
-            <label>Chauffeur</label>
-            <p>${recipe.chauffeur}</p>
-        </div>
-        <div class="detail-item">
-            <label>Type de course</label>
-            <p>${recipe.typeCourse || 'Non spécifié'}</p>
-        </div>
-        <div class="detail-item">
-            <label>Remarques</label>
-            <p>${recipe.remarques || 'Aucune remarque'}</p>
-        </div>
-        <div class="form-actions">
+        <div class="space-y-4">
+            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-lg font-bold text-slate-800">${recipe.matricule || 'N/A'}</h3>
+                    <span class="px-3 py-1 rounded-full text-sm font-medium ${badgeColor}">${badgeText}</span>
+                </div>
+                <p class="text-sm text-slate-600"><i class="fa-solid fa-calendar mr-2"></i>${dateStr}</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-white rounded-lg p-3 border border-slate-200">
+                    <p class="text-xs text-slate-500 mb-1">Recette Attendue</p>
+                    <p class="text-lg font-bold text-slate-800">${parseFloat(recipe.recetteNormale || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+                <div class="bg-white rounded-lg p-3 border border-slate-200">
+                    <p class="text-xs text-slate-500 mb-1">Montant Versé</p>
+                    <p class="text-lg font-bold text-slate-800">${parseFloat(recipe.montantVerse || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+            </div>
+
+            ${difference !== 0 ? `
+                <div class="bg-${difference < 0 ? 'red' : 'green'}-50 border border-${difference < 0 ? 'red' : 'green'}-200 rounded-lg p-3">
+                    <p class="text-sm font-medium text-${difference < 0 ? 'red' : 'green'}-800">
+                        <i class="fa-solid fa-${difference < 0 ? 'arrow-down' : 'arrow-up'} mr-2"></i>
+                        ${badgeText}: ${Math.abs(difference).toLocaleString('fr-FR')} FCFA
+                    </p>
+                </div>
+            ` : ''}
+
+            <div class="space-y-3">
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-user text-slate-400 mt-1"></i>
+                    <div class="flex-1">
+                        <p class="text-xs text-slate-500 mb-1">Chauffeur</p>
+                        <p class="text-sm font-medium text-slate-800">${recipe.chauffeur || 'Non spécifié'}</p>
+                    </div>
+                </div>
+                <div class="flex items-start gap-3">
+                    <i class="fa-solid fa-route text-slate-400 mt-1"></i>
+                    <div class="flex-1">
+                        <p class="text-xs text-slate-500 mb-1">Type de Course</p>
+                        <p class="text-sm font-medium text-slate-800">${recipe.typeCourse || 'Non spécifié'}</p>
+                    </div>
+                </div>
+                ${recipe.remarques ? `
+                    <div class="flex items-start gap-3">
+                        <i class="fa-solid fa-comment text-slate-400 mt-1"></i>
+                        <div class="flex-1">
+                            <p class="text-xs text-slate-500 mb-1">Remarques</p>
+                            <p class="text-sm text-slate-700">${recipe.remarques}</p>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+
             ${currentRole === 'gestionnaire' ? `
-            <button class="btn btn-primary" onclick="editRecipe(${recipe.id})">
-                <i class="fas fa-edit"></i> Modifier
-            </button>
-            <button class="btn btn-danger" onclick="confirmDeleteRecipe(${recipe.id})">
-                <i class="fas fa-trash"></i> Supprimer
-            </button>
+                <div class="flex gap-3 pt-4 border-t border-slate-200">
+                    <button class="flex-1 px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors" onclick="closeRecipeDetailModal(); editRecipe(${recipe.id})">
+                        <i class="fas fa-edit mr-2"></i>Modifier
+                    </button>
+                    <button class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors" onclick="closeRecipeDetailModal(); confirmDeleteRecipe(${recipe.id})">
+                        <i class="fas fa-trash mr-2"></i>Supprimer
+                    </button>
+                </div>
             ` : ''}
         </div>
     `;
 
-    const backBtn = document.getElementById('backToList');
-    if (backBtn) {
-        backBtn.onclick = () => showPage('list-recipes');
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+}
+
+function closeRecipeDetailModal() {
+    const modal = document.getElementById('recipeDetailModal');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
-    
-    // Vérifier si la page recipe-detail existe avant d'essayer de l'afficher
-    const recipeDetailPage = document.getElementById('recipe-detail');
-    if (recipeDetailPage) {
-        showPage('recipe-detail');
+}
+
+function initRecipeDetailModal() {
+    const modal = document.getElementById('recipeDetailModal');
+    if (!modal) return;
+
+    const closeBtn = modal.querySelector('.close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeRecipeDetailModal);
+    }
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeRecipeDetailModal();
+        }
+    });
+}
+
+async function showRecipeDetail(id) {
+    if (window.innerWidth < 768) {
+        showRecipeDetailModal(id);
+    } else {
+        const recipe = await getRecipe(id);
+        if (!recipe) return;
+
+        const difference = recipe.montantVerse - recipe.recetteNormale;
+        let badgeClass = 'correct';
+        let badgeText = 'Correct';
+
+        if (difference < 0) {
+            badgeClass = 'deficit';
+            badgeText = 'Déficit';
+        } else if (difference > 0) {
+            badgeClass = 'surplus';
+            badgeText = 'Surplus';
+        }
+
+        const content = document.getElementById('recipeDetailContent');
+        if (!content) {
+            showRecipeDetailModal(id);
+            return;
+        }
+        
+        content.innerHTML = `
+            <div class="detail-item">
+                <label>Matricule</label>
+                <p>${recipe.matricule}</p>
+            </div>
+            <div class="detail-item">
+                <label>Date</label>
+                <p>${new Date(recipe.date).toLocaleDateString('fr-FR')}</p>
+            </div>
+            <div class="detail-item">
+                <label>Recette normale</label>
+                <p>${recipe.recetteNormale.toLocaleString()} FCFA</p>
+            </div>
+            <div class="detail-item">
+                <label>Montant versé</label>
+                <p>${recipe.montantVerse.toLocaleString()} FCFA</p>
+            </div>
+            <div class="detail-item">
+                <label>Résultat</label>
+                <p><span class="badge ${badgeClass}">${badgeText}</span> ${Math.abs(difference).toLocaleString()} FCFA</p>
+            </div>
+            <div class="detail-item">
+                <label>Chauffeur</label>
+                <p>${recipe.chauffeur}</p>
+            </div>
+            <div class="detail-item">
+                <label>Type de course</label>
+                <p>${recipe.typeCourse || 'Non spécifié'}</p>
+            </div>
+            <div class="detail-item">
+                <label>Remarques</label>
+                <p>${recipe.remarques || 'Aucune remarque'}</p>
+            </div>
+            <div class="form-actions">
+                ${currentRole === 'gestionnaire' ? `
+                <button class="btn btn-primary" onclick="editRecipe(${recipe.id})">
+                    <i class="fas fa-edit"></i> Modifier
+                </button>
+                <button class="btn btn-danger" onclick="confirmDeleteRecipe(${recipe.id})">
+                    <i class="fas fa-trash"></i> Supprimer
+                </button>
+                ` : ''}
+            </div>
+        `;
+
+        const backBtn = document.getElementById('backToList');
+        if (backBtn) {
+            backBtn.onclick = () => showPage('list-recipes');
+        }
+        
+        const recipeDetailPage = document.getElementById('recipe-detail');
+        if (recipeDetailPage) {
+            showPage('recipe-detail');
+        }
     }
 }
 
@@ -2086,6 +2281,16 @@ async function loadTaxisList() {
     try {
         const taxis = await getAllTaxis();
         displayTaxis(Array.isArray(taxis) ? taxis : []);
+        
+        // ✅ Réinitialiser le bouton "Ajouter Taxi" après le chargement de la liste
+        setTimeout(() => {
+            if (window.initAddTaxiButton) {
+                window.initAddTaxiButton();
+            } else {
+                // Si la fonction n'existe pas encore, réinitialiser le modal complet
+                initTaxiModal();
+            }
+        }, 150);
     } catch (error) {
         console.error('Erreur loadTaxisList:', error);
         const tbody = document.getElementById('taxisTableBody');
@@ -2171,33 +2376,88 @@ async function loadTaxisDropdown(selectId) {
     if (currentValue) select.value = currentValue;
 }
 
-// Modal Taxi
+// Modal Taxi - Initialisation améliorée
 function initTaxiModal() {
     const modal = document.getElementById('taxiModal');
-    const addBtn = document.getElementById('addTaxiBtn');
     const form = document.getElementById('taxiForm');
-    const closeBtns = document.querySelectorAll('.close, .close-modal');
-
-    if (addBtn) {
-        addBtn.addEventListener('click', () => {
-            document.getElementById('taxiModalTitle').textContent = 'Ajouter un Taxi';
-            document.getElementById('taxiForm').reset();
-            document.getElementById('taxiId').value = '';
-            // Toujours définir le propriétaire à COURONNE DE VIE
-            document.getElementById('taxiProprietaire').value = 'COURONNE DE VIE';
-            modal.classList.add('active');
-        });
+    
+    if (!modal || !form) {
+        console.warn('Modal Taxi ou formulaire non trouvé - réessai dans 500ms');
+        // Réessayer après un délai si les éléments ne sont pas encore chargés
+        setTimeout(() => initTaxiModal(), 500);
+        return;
     }
 
-    form.addEventListener('submit', async (e) => {
+    // ✅ Fonction pour initialiser le bouton "Ajouter Taxi"
+    function initAddTaxiButton() {
+        const addBtn = document.getElementById('addTaxiBtn');
+        if (!addBtn) {
+            // Le bouton n'existe pas encore (page taxis pas encore affichée)
+            return;
+        }
+        
+        // Supprimer les anciens listeners en clonant le bouton
+        const newAddBtn = addBtn.cloneNode(true);
+        addBtn.parentNode.replaceChild(newAddBtn, addBtn);
+        
+        // Attacher le nouvel événement
+        const handleAddTaxi = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const modalTitle = document.getElementById('taxiModalTitle');
+            const taxiForm = document.getElementById('taxiForm');
+            const taxiId = document.getElementById('taxiId');
+            const taxiProprietaire = document.getElementById('taxiProprietaire');
+            
+            if (modalTitle) modalTitle.textContent = 'Ajouter un Taxi';
+            if (taxiForm) taxiForm.reset();
+            if (taxiId) taxiId.value = '';
+            if (taxiProprietaire) taxiProprietaire.value = 'COURONNE DE VIE';
+            
+            // Afficher le modal
+            if (modal) {
+                modal.style.display = 'flex';
+                modal.classList.add('show');
+            }
+        };
+        
+        newAddBtn.addEventListener('click', handleAddTaxi, { passive: false });
+        newAddBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleAddTaxi(e);
+        }, { passive: false });
+        
+        // S'assurer que le bouton est cliquable
+        newAddBtn.style.pointerEvents = 'auto';
+        newAddBtn.style.cursor = 'pointer';
+        newAddBtn.style.touchAction = 'manipulation';
+        
+        console.log('✅ Bouton Ajouter Taxi initialisé');
+    }
+    
+    // Initialiser le bouton immédiatement
+    initAddTaxiButton();
+    
+    // ✅ Exposer la fonction pour pouvoir la réutiliser depuis loadTaxisList
+    window.initAddTaxiButton = initAddTaxiButton;
+
+    // ✅ Réinitialiser le formulaire pour éviter les doublons
+    const formClone = form.cloneNode(true);
+    form.parentNode.replaceChild(formClone, form);
+    
+    formClone.addEventListener('submit', async (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        
         const taxiData = {
-            matricule: document.getElementById('taxiMatricule').value,
-            marque: document.getElementById('taxiMarque').value,
+            matricule: document.getElementById('taxiMatricule')?.value || '',
+            marque: document.getElementById('taxiMarque')?.value || '',
             proprietaire: 'COURONNE DE VIE' // Toujours COURONNE DE VIE
         };
 
-        const id = document.getElementById('taxiId').value;
+        const id = document.getElementById('taxiId')?.value;
 
         try {
             if (id) {
@@ -2207,7 +2467,14 @@ function initTaxiModal() {
                 await addTaxi(taxiData);
                 showToast('Taxi ajouté avec succès!', 'success');
             }
-            modal.classList.remove('show');
+            
+            // Fermer le modal
+            const currentModal = document.getElementById('taxiModal');
+            if (currentModal) {
+                currentModal.style.display = 'none';
+                currentModal.classList.remove('show');
+            }
+            
             loadTaxisList();
             loadTaxisDropdown('matricule');
             loadTaxisDropdown('filterMatricule');
@@ -2217,17 +2484,37 @@ function initTaxiModal() {
         }
     });
 
+    // Gestion des boutons de fermeture
+    const closeBtns = document.querySelectorAll('#taxiModal .close, #taxiModal .close-modal');
     closeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            modal.classList.remove('show');
+        const closeHandler = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const currentModal = document.getElementById('taxiModal');
+            if (currentModal) {
+                currentModal.style.display = 'none';
+                currentModal.classList.remove('show');
+            }
+        };
+        
+        btn.addEventListener('click', closeHandler);
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            closeHandler(e);
         });
     });
 
-    modal.addEventListener('click', (e) => {
+    // Fermer le modal en cliquant à l'extérieur
+    const modalClickHandler = (e) => {
         if (e.target === modal) {
+            modal.style.display = 'none';
             modal.classList.remove('show');
         }
-    });
+    };
+    
+    modal.addEventListener('click', modalClickHandler);
+    
+    console.log('✅ Modal Taxi initialisé');
 }
 
 async function editTaxi(id) {
@@ -2655,6 +2942,7 @@ async function loadStatistics() {
     calculateStats(recipes);
     drawCharts(recipes);
     displayDriversRanking(recipes);
+    // Les statistiques par semaine et par mois sont calculées dans calculateStats()
 }
 
 // Fonction pour charger les données du dashboard
@@ -2716,6 +3004,1177 @@ function calculateStats(recipes, taxis = []) {
     }
     if (activeTaxisEl) {
         activeTaxisEl.textContent = `${activeTaxisToday.size} / ${totalTaxis}`;
+    }
+    
+    // Calculer et afficher les statistiques par semaine et par mois
+    calculateWeeklyStats(recipes);
+    calculateMonthlyStats(recipes);
+    
+    // Calculer les totaux pour les cartes du dashboard
+    calculateDashboardCards(recipes);
+    
+    // Identifier et afficher les taxis en retard
+    identifyDelayedTaxis(recipes, taxis);
+    
+    // Afficher les taxis sans recette aujourd'hui (visible pour tous)
+    displayTaxisWithoutRecipeToday(recipes, taxis);
+    displayUnpaidDaysSummary();
+}
+
+// Fonction pour calculer les recettes par semaine
+function calculateWeeklyStats(recipes) {
+    // Obtenir le début de la semaine (lundi)
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        // Ajuster pour lundi = 1 (dimanche = 0 devient -6 pour remonter au lundi précédent)
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const weekStart = new Date(d);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0); // Réinitialiser l'heure
+        return weekStart;
+    }
+    
+    // Grouper les recettes par semaine
+    const weeklyStats = {};
+    
+    recipes.forEach(recipe => {
+        if (!recipe.date) return;
+        
+        const recipeDate = new Date(recipe.date);
+        const weekStart = getWeekStart(recipeDate);
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weeklyStats[weekKey]) {
+            weeklyStats[weekKey] = {
+                weekStart: weekStart,
+                total: 0,
+                count: 0,
+                recetteNormale: 0,
+                montantVerse: 0
+            };
+        }
+        
+        weeklyStats[weekKey].total += parseFloat(recipe.montantVerse || 0);
+        weeklyStats[weekKey].recetteNormale += parseFloat(recipe.recetteNormale || 0);
+        weeklyStats[weekKey].montantVerse += parseFloat(recipe.montantVerse || 0);
+        weeklyStats[weekKey].count += 1;
+    });
+    
+    // Trier par date (plus récent en premier)
+    const sortedWeeks = Object.entries(weeklyStats)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 12); // Dernières 12 semaines
+    
+    // Afficher les statistiques hebdomadaires
+    displayWeeklyStats(sortedWeeks);
+}
+
+// Fonction pour calculer les recettes par mois
+function calculateMonthlyStats(recipes) {
+    // Grouper les recettes par mois
+    const monthlyStats = {};
+    
+    recipes.forEach(recipe => {
+        if (!recipe.date) return;
+        
+        const recipeDate = new Date(recipe.date);
+        const monthKey = `${recipeDate.getFullYear()}-${String(recipeDate.getMonth() + 1).padStart(2, '0')}`;
+        
+        if (!monthlyStats[monthKey]) {
+            monthlyStats[monthKey] = {
+                month: monthKey,
+                monthName: recipeDate.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+                total: 0,
+                count: 0,
+                recetteNormale: 0,
+                montantVerse: 0
+            };
+        }
+        
+        monthlyStats[monthKey].total += parseFloat(recipe.montantVerse || 0);
+        monthlyStats[monthKey].recetteNormale += parseFloat(recipe.recetteNormale || 0);
+        monthlyStats[monthKey].montantVerse += parseFloat(recipe.montantVerse || 0);
+        monthlyStats[monthKey].count += 1;
+    });
+    
+    // Trier par date (plus récent en premier)
+    const sortedMonths = Object.entries(monthlyStats)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(0, 12); // Derniers 12 mois
+    
+    // Afficher les statistiques mensuelles
+    displayMonthlyStats(sortedMonths);
+}
+
+// Fonction pour afficher les statistiques hebdomadaires
+function displayWeeklyStats(weeklyData) {
+    const container = document.getElementById('weeklyStatsContainer');
+    if (!container) return;
+    
+    if (weeklyData.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-slate-400">Aucune donnée hebdomadaire disponible</div>';
+        return;
+    }
+    
+    const formatDate = (date) => {
+        const d = new Date(date);
+        const weekEnd = new Date(d);
+        weekEnd.setDate(d.getDate() + 6);
+        return `${d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+    };
+    
+    const html = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
+                    <tr>
+                        <th class="p-3 text-left">Semaine</th>
+                        <th class="p-3 text-right">Recettes Attendues</th>
+                        <th class="p-3 text-right">Montant Versé</th>
+                        <th class="p-3 text-right">Différence</th>
+                        <th class="p-3 text-center">Nombre</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${weeklyData.map(([weekKey, stats]) => {
+                        const difference = stats.montantVerse - stats.recetteNormale;
+                        const diffClass = difference < 0 ? 'text-red-600' : difference > 0 ? 'text-emerald-600' : 'text-slate-600';
+                        const diffPrefix = difference < 0 ? '-' : difference > 0 ? '+' : '';
+                        return `
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3 font-medium text-slate-800">${formatDate(weekKey)}</td>
+                                <td class="p-3 text-right text-slate-600">${stats.recetteNormale.toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-right text-slate-600">${stats.montantVerse.toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-right font-bold ${diffClass}">${diffPrefix}${Math.abs(difference).toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-center text-slate-500">${stats.count}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour afficher les statistiques mensuelles
+function displayMonthlyStats(monthlyData) {
+    const container = document.getElementById('monthlyStatsContainer');
+    if (!container) return;
+    
+    if (monthlyData.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-slate-400">Aucune donnée mensuelle disponible</div>';
+        return;
+    }
+    
+    const html = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
+                    <tr>
+                        <th class="p-3 text-left">Mois</th>
+                        <th class="p-3 text-right">Recettes Attendues</th>
+                        <th class="p-3 text-right">Montant Versé</th>
+                        <th class="p-3 text-right">Différence</th>
+                        <th class="p-3 text-center">Nombre</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${monthlyData.map(([monthKey, stats]) => {
+                        const difference = stats.montantVerse - stats.recetteNormale;
+                        const diffClass = difference < 0 ? 'text-red-600' : difference > 0 ? 'text-emerald-600' : 'text-slate-600';
+                        const diffPrefix = difference < 0 ? '-' : difference > 0 ? '+' : '';
+                        return `
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3 font-medium text-slate-800 capitalize">${stats.monthName}</td>
+                                <td class="p-3 text-right text-slate-600">${stats.recetteNormale.toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-right text-slate-600">${stats.montantVerse.toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-right font-bold ${diffClass}">${diffPrefix}${Math.abs(difference).toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-center text-slate-500">${stats.count}</td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour calculer les totaux hebdomadaires et mensuels pour les cartes du dashboard
+function calculateDashboardCards(recipes) {
+    // Obtenir le début de la semaine (lundi)
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const weekStart = new Date(d);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        return weekStart;
+    }
+    
+    const today = new Date();
+    const currentWeekStart = getWeekStart(today);
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+    
+    // Calculer le total de la semaine en cours
+    const weekRecipes = recipes.filter(r => {
+        if (!r.date) return false;
+        const recipeDate = new Date(r.date);
+        const recipeWeekStart = getWeekStart(recipeDate);
+        return recipeWeekStart.getTime() === currentWeekStart.getTime();
+    });
+    
+    const weekTotal = weekRecipes.reduce((sum, r) => sum + (parseFloat(r.montantVerse) || 0), 0);
+    const weekCount = weekRecipes.length;
+    
+    // Calculer le total du mois en cours
+    const monthRecipes = recipes.filter(r => {
+        if (!r.date) return false;
+        const recipeDate = new Date(r.date);
+        return recipeDate.getMonth() === currentMonth && recipeDate.getFullYear() === currentYear;
+    });
+    
+    const monthTotal = monthRecipes.reduce((sum, r) => sum + (parseFloat(r.montantVerse) || 0), 0);
+    const monthCount = monthRecipes.length;
+    
+    // Afficher dans les cartes
+    const weekTotalEl = document.getElementById('weekTotal');
+    const weekInfoEl = document.getElementById('weekInfo');
+    const monthTotalEl = document.getElementById('monthTotal');
+    const monthInfoEl = document.getElementById('monthInfo');
+    
+    if (weekTotalEl) {
+        weekTotalEl.textContent = weekTotal.toLocaleString('fr-FR') + ' FCFA';
+    }
+    if (weekInfoEl) {
+        const weekEnd = new Date(currentWeekStart);
+        weekEnd.setDate(currentWeekStart.getDate() + 6);
+        weekInfoEl.textContent = `${currentWeekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} (${weekCount} recettes)`;
+    }
+    if (monthTotalEl) {
+        monthTotalEl.textContent = monthTotal.toLocaleString('fr-FR') + ' FCFA';
+    }
+    if (monthInfoEl) {
+        monthInfoEl.textContent = `${today.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })} (${monthCount} recettes)`;
+    }
+}
+
+// Fonction pour identifier les taxis en retard
+function identifyDelayedTaxis(recipes, taxis) {
+    const container = document.getElementById('delayedTaxisContainer');
+    if (!container) return;
+    
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // Calculer la date limite (3 jours sans recette = en retard)
+    const limitDate = new Date(today);
+    limitDate.setDate(today.getDate() - 3);
+    const limitDateStr = limitDate.toISOString().split('T')[0];
+    
+    // Obtenir tous les matricules des taxis
+    const allMatricules = taxis.map(t => t.matricule).filter(Boolean);
+    
+    // Grouper les recettes par matricule
+    const taxiStats = {};
+    recipes.forEach(recipe => {
+        if (!recipe.matricule) return;
+        if (!taxiStats[recipe.matricule]) {
+            taxiStats[recipe.matricule] = {
+                matricule: recipe.matricule,
+                lastRecipeDate: null,
+                totalDeficit: 0,
+                recipes: []
+            };
+        }
+        taxiStats[recipe.matricule].recipes.push(recipe);
+        
+        // Trouver la dernière date de recette
+        if (!taxiStats[recipe.matricule].lastRecipeDate || recipe.date > taxiStats[recipe.matricule].lastRecipeDate) {
+            taxiStats[recipe.matricule].lastRecipeDate = recipe.date;
+        }
+        
+        // Calculer le déficit cumulé
+        const diff = (parseFloat(recipe.montantVerse) || 0) - (parseFloat(recipe.recetteNormale) || 0);
+        if (diff < 0) {
+            taxiStats[recipe.matricule].totalDeficit += Math.abs(diff);
+        }
+    });
+    
+    // Identifier les taxis en retard
+    const delayedTaxis = [];
+    const todayRecipesMatricules = new Set(recipes.filter(r => r.date === todayStr).map(r => r.matricule).filter(Boolean));
+    
+    allMatricules.forEach(matricule => {
+        const stats = taxiStats[matricule];
+        const taxiInfo = taxis.find(t => t.matricule === matricule);
+        
+        if (!stats) {
+            // Taxi sans aucune recette
+            delayedTaxis.push({
+                matricule: matricule,
+                marque: taxiInfo?.marque || 'N/A',
+                reason: 'no-recipes',
+                message: 'Aucune recette enregistrée',
+                lastDate: null,
+                deficit: 0,
+                priority: 'high'
+            });
+        } else {
+            let isDelayed = false;
+            let reason = '';
+            let message = '';
+            let priority = 'medium';
+            
+            // 1. Taxi sans recette aujourd'hui (mais qui a eu des recettes récemment)
+            if (!todayRecipesMatricules.has(matricule)) {
+                // Si le taxi a eu une recette hier ou avant-hier, il est en retard aujourd'hui
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                
+                const hasRecentRecipe = stats.lastRecipeDate && stats.lastRecipeDate >= yesterdayStr;
+                if (hasRecentRecipe) {
+                    isDelayed = true;
+                    reason = 'no-today';
+                    message = 'Pas de recette aujourd\'hui';
+                    priority = 'medium';
+                }
+            }
+            
+            // 2. Taxi sans recette depuis plus de 3 jours
+            if (stats.lastRecipeDate && stats.lastRecipeDate < limitDateStr) {
+                const daysSince = Math.floor((new Date(todayStr) - new Date(stats.lastRecipeDate)) / (1000 * 60 * 60 * 24));
+                isDelayed = true;
+                reason = 'no-recent-recipes';
+                message = `Aucune recette depuis ${daysSince} jour(s)`;
+                priority = daysSince > 7 ? 'high' : 'medium';
+            }
+            
+            // 3. Taxi avec déficit cumulé important (> 50000 FCFA)
+            if (stats.totalDeficit > 50000) {
+                isDelayed = true;
+                if (reason) {
+                    reason = 'both';
+                    message += ` | Arriérés: ${stats.totalDeficit.toLocaleString('fr-FR')} FCFA`;
+                } else {
+                    reason = 'deficit';
+                    message = `Arriérés: ${stats.totalDeficit.toLocaleString('fr-FR')} FCFA`;
+                }
+                if (stats.totalDeficit > 100000) {
+                    priority = 'high';
+                }
+            }
+            
+            if (isDelayed) {
+                delayedTaxis.push({
+                    matricule: matricule,
+                    marque: taxiInfo?.marque || 'N/A',
+                    reason: reason,
+                    message: message,
+                    lastDate: stats.lastRecipeDate,
+                    deficit: stats.totalDeficit,
+                    priority: priority
+                });
+            }
+        }
+    });
+    
+    // Trier par priorité (high d'abord) puis par déficit
+    delayedTaxis.sort((a, b) => {
+        const priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+        if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+            return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+        return b.deficit - a.deficit;
+    });
+    
+    // Afficher les taxis en retard
+    displayDelayedTaxis(delayedTaxis);
+}
+
+// Fonction pour afficher les taxis en retard
+function displayDelayedTaxis(delayedTaxis) {
+    const container = document.getElementById('delayedTaxisContainer');
+    if (!container) return;
+    
+    if (delayedTaxis.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-2 bg-emerald-50 border border-emerald-200 rounded-lg md:rounded-xl p-4 md:p-6 text-center">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-2xl md:text-3xl mb-2 md:mb-3"></i>
+                <p class="text-emerald-800 font-medium text-sm md:text-base">Aucun taxi en retard</p>
+                <p class="text-emerald-600 text-xs md:text-sm mt-1">Tous les taxis sont à jour</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = delayedTaxis.map(taxi => {
+        const isHighPriority = taxi.priority === 'high';
+        const priorityBg = isHighPriority ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200';
+        const priorityIconColor = isHighPriority ? 'text-red-600' : 'text-orange-600';
+        const priorityBadgeBg = isHighPriority ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700';
+        
+        const icon = taxi.reason === 'no-recipes' ? 'fa-circle-xmark' : 
+                    taxi.reason === 'no-recent-recipes' ? 'fa-clock' : 
+                    taxi.reason === 'deficit' ? 'fa-exclamation-triangle' : 'fa-triangle-exclamation';
+        
+        const lastDateStr = taxi.lastDate ? new Date(taxi.lastDate).toLocaleDateString('fr-FR') : 'Jamais';
+        
+        return `
+            <div class="${priorityBg} border rounded-lg md:rounded-xl p-2 md:p-4">
+                <div class="flex items-start justify-between mb-1 md:mb-2">
+                    <div class="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                        <div class="p-1 md:p-2 bg-white rounded-lg flex-shrink-0">
+                            <i class="fa-solid ${icon} ${priorityIconColor} text-sm md:text-base"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 class="font-bold text-slate-800 text-sm md:text-base truncate">${taxi.matricule}</h4>
+                            <p class="text-xs text-slate-500 truncate">${taxi.marque}</p>
+                        </div>
+                    </div>
+                    ${taxi.deficit > 0 ? `
+                        <span class="px-1.5 md:px-2 py-0.5 md:py-1 ${priorityBadgeBg} rounded text-xs font-bold flex-shrink-0 ml-2">
+                            ${taxi.deficit.toLocaleString('fr-FR')} FCFA
+                        </span>
+                    ` : ''}
+                </div>
+                <p class="text-xs md:text-sm text-slate-700 mb-1 truncate">${taxi.message}</p>
+                <p class="text-xs text-slate-500 truncate">Dernière: ${lastDateStr}</p>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour afficher les taxis sans recette aujourd'hui
+async function displayTaxisWithoutRecipeToday(recipes, taxis) {
+    const container = document.getElementById('noRecipeTodayContainer');
+    if (!container) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecipesMatricules = new Set(recipes.filter(r => r.date === today).map(r => r.matricule).filter(Boolean));
+    
+    // Trouver les taxis sans recette aujourd'hui
+    const taxisWithoutRecipe = taxis.filter(t => t.matricule && !todayRecipesMatricules.has(t.matricule));
+    
+    if (taxisWithoutRecipe.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-2 md:col-span-3 bg-emerald-50 border border-emerald-200 rounded-lg md:rounded-xl p-4 md:p-6 text-center">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-2xl md:text-3xl mb-2 md:mb-3"></i>
+                <p class="text-emerald-800 font-medium text-sm md:text-base">Tous les taxis ont versé leur recette aujourd'hui</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Utiliser les données depuis allData (Supabase)
+    const unpaidDays = allData.unpaidDays || [];
+    
+    const html = taxisWithoutRecipe.map(taxi => {
+        const unpaidDaysForTaxi = unpaidDays.filter(u => u && u.matricule === taxi.matricule);
+        const totalDays = unpaidDaysForTaxi.length;
+        const totalAmount = unpaidDaysForTaxi.reduce((sum, u) => sum + (parseFloat(u.amount) || 0), 0);
+        
+        return `
+            <div class="bg-orange-50 border border-orange-200 rounded-lg md:rounded-xl p-2 md:p-4">
+                <div class="flex flex-col md:flex-row md:items-start md:justify-between mb-2 md:mb-3">
+                    <div class="flex-1 min-w-0 mb-1 md:mb-0">
+                        <h4 class="font-bold text-slate-800 text-sm md:text-base truncate">${taxi.matricule}</h4>
+                        <p class="text-xs text-slate-500 truncate">${taxi.marque || 'N/A'}</p>
+                    </div>
+                    ${totalDays > 0 ? `
+                        <div class="text-right md:text-right">
+                            <p class="text-xs text-orange-600 font-medium">${totalDays} jour(s)</p>
+                            <p class="text-xs text-orange-700 font-bold">${totalAmount.toLocaleString('fr-FR')} FCFA</p>
+                        </div>
+                    ` : ''}
+                </div>
+                ${currentRole === 'gestionnaire' ? `
+                    <button onclick="openMissingRecipeModal('${taxi.matricule}', '${taxi.marque || ''}', '${taxi.id || ''}')" 
+                            class="w-full px-2 md:px-4 py-1.5 md:py-2 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 transition-colors text-xs md:text-sm">
+                        <i class="fa-solid fa-exclamation-circle mr-1 md:mr-2"></i><span class="hidden md:inline">Signaler</span><span class="md:hidden">Signaler</span>
+                    </button>
+                ` : `
+                    <div class="w-full px-2 md:px-4 py-1.5 md:py-2 bg-slate-200 text-slate-600 rounded-lg font-medium text-xs md:text-sm text-center">
+                        <i class="fa-solid fa-info-circle mr-1 md:mr-2"></i><span class="hidden md:inline">Mode lecture seule</span><span class="md:hidden">Lecture</span>
+                    </div>
+                `}
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour ouvrir le modal de signalement
+function openMissingRecipeModal(matricule, marque, taxiId) {
+    const modal = document.getElementById('missingRecipeModal');
+    const form = document.getElementById('missingRecipeForm');
+    
+    if (!modal || !form) {
+        showToast('Erreur: Modal non trouvé', 'error');
+        return;
+    }
+    
+    // Remplir les champs
+    document.getElementById('missingRecipeMatricule').value = matricule;
+    document.getElementById('missingRecipeTaxiMatricule').value = matricule;
+    document.getElementById('missingRecipeTaxiMarque').value = marque || 'N/A';
+    document.getElementById('missingRecipeTaxiId').value = taxiId || '';
+    
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('missingRecipeDate').value = today;
+    document.getElementById('missingRecipeTaxiDate').value = today;
+    
+    // Réinitialiser le formulaire
+    form.reset();
+    document.getElementById('missingRecipeAmount').value = '';
+    document.getElementById('missingRecipeReason').value = '';
+    
+    // Réinitialiser les boutons de montant
+    document.querySelectorAll('.amount-btn').forEach(btn => {
+        btn.classList.remove('bg-brand-600', 'text-white');
+        btn.classList.add('bg-slate-100', 'hover:bg-slate-200');
+    });
+    
+    // Afficher le modal
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+}
+
+// Initialiser le modal de signalement
+function initMissingRecipeModal() {
+    const modal = document.getElementById('missingRecipeModal');
+    if (!modal) return;
+    
+    // Fermer le modal
+    const closeBtn = modal.querySelector('.close');
+    const closeModalBtn = modal.querySelector('.close-modal');
+    
+    const closeModal = () => {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    };
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+    
+    // Fermer en cliquant en dehors
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+    
+    // Gestion des boutons de montant
+    document.querySelectorAll('.amount-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Réinitialiser tous les boutons
+            document.querySelectorAll('.amount-btn').forEach(b => {
+                b.classList.remove('bg-brand-600', 'text-white');
+                b.classList.add('bg-slate-100', 'hover:bg-slate-200');
+            });
+            
+            // Activer le bouton cliqué
+            this.classList.remove('bg-slate-100', 'hover:bg-slate-200');
+            this.classList.add('bg-brand-600', 'text-white');
+            
+            // Mettre à jour le champ caché
+            const amount = this.getAttribute('data-amount');
+            document.getElementById('missingRecipeAmount').value = amount;
+        });
+    });
+    
+    // Gestion du formulaire
+    const form = document.getElementById('missingRecipeForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleMissingRecipeSubmit();
+        });
+    }
+}
+
+// Gérer la soumission du formulaire de signalement
+async function handleMissingRecipeSubmit() {
+    const matricule = document.getElementById('missingRecipeMatricule').value;
+    const date = document.getElementById('missingRecipeDate').value;
+    const amount = document.getElementById('missingRecipeAmount').value;
+    const reason = document.getElementById('missingRecipeReason').value;
+    
+    if (!amount) {
+        showToast('Veuillez sélectionner un montant attendu', 'error');
+        return;
+    }
+    
+    try {
+        // Enregistrer le jour non versé
+        await saveUnpaidDay({
+            matricule: matricule,
+            date: date,
+            amount: parseFloat(amount),
+            reason: reason || '',
+            createdAt: new Date().toISOString()
+        });
+        
+        showToast(`Jour non versé enregistré pour ${matricule}`, 'success');
+        
+        // Fermer le modal
+        const modal = document.getElementById('missingRecipeModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+        
+        // Recharger les données
+        const recipes = await getAllRecipes();
+        const taxis = await getAllTaxis();
+        displayTaxisWithoutRecipeToday(recipes, taxis);
+        displayUnpaidDaysSummary();
+        
+    } catch (error) {
+        console.error('Erreur lors de l\'enregistrement:', error);
+        showToast('Erreur lors de l\'enregistrement: ' + error.message, 'error');
+    }
+}
+
+// Fonction pour sauvegarder un jour non versé
+async function saveUnpaidDay(unpaidDay) {
+    // Si gestionnaire, sauvegarder dans Supabase d'abord
+    if (currentRole === 'gestionnaire') {
+        try {
+            const result = await supabaseRequest('unpaid_days', {
+                method: 'POST',
+                body: {
+                    matricule: unpaidDay.matricule,
+                    date: unpaidDay.date,
+                    amount: parseFloat(unpaidDay.amount) || 0,
+                    reason: unpaidDay.reason || ''
+                }
+            });
+
+            if (result && Array.isArray(result) && result.length > 0) {
+                unpaidDay.id = result[0].id;
+                // Rafraîchir les données depuis Supabase
+                await fetchDataFromSupabase();
+                showToast('Jour non versé enregistré avec succès dans Supabase!', 'success');
+                return result[0].id;
+            } else {
+                throw new Error('Réponse Supabase invalide');
+            }
+        } catch (error) {
+            console.error('Erreur Supabase saveUnpaidDay:', error);
+            showToast('Erreur lors de l\'enregistrement dans Supabase: ' + error.message, 'error');
+            throw error;
+        }
+    }
+    
+    // Sauvegarder dans IndexedDB comme backup
+    return new Promise((resolve, reject) => {
+        if (!db) {
+            const stored = JSON.parse(localStorage.getItem('unpaidDays') || '[]');
+            stored.push({ ...unpaidDay, id: Date.now() });
+            localStorage.setItem('unpaidDays', JSON.stringify(stored));
+            resolve();
+            return;
+        }
+        
+        const transaction = db.transaction(['unpaidDays'], 'readwrite');
+        const store = transaction.objectStore('unpaidDays');
+        const request = store.add({ ...unpaidDay, id: Date.now() });
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+// Fonction pour récupérer les jours non versés
+async function getUnpaidDays() {
+    try {
+        // Utiliser les données depuis Supabase si disponibles
+        if (allData.unpaidDays && Array.isArray(allData.unpaidDays) && allData.unpaidDays.length > 0) {
+            return allData.unpaidDays.filter(u => u && typeof u === 'object');
+        }
+        
+        // Sinon, utiliser IndexedDB
+        return new Promise((resolve) => {
+            if (!db) {
+                const stored = JSON.parse(localStorage.getItem('unpaidDays') || '[]');
+                resolve(stored);
+                return;
+            }
+            
+            const transaction = db.transaction(['unpaidDays'], 'readonly');
+            const store = transaction.objectStore('unpaidDays');
+            const request = store.getAll();
+            
+            request.onsuccess = () => {
+                resolve(request.result || []);
+            };
+            request.onerror = () => {
+                resolve([]);
+            };
+        });
+    } catch (error) {
+        console.error('Erreur getUnpaidDays:', error);
+        return [];
+    }
+}
+
+// Fonction pour afficher le résumé des jours non versés
+async function displayUnpaidDaysSummary() {
+    const container = document.getElementById('unpaidDaysSummary');
+    if (!container) return;
+    
+    const unpaidDays = allData.unpaidDays || [];
+    
+    if (unpaidDays.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-4 text-slate-400">
+                <i class="fa-solid fa-circle-check text-2xl mb-2"></i>
+                <p>Aucun jour non versé enregistré</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Grouper par matricule
+    const summaryByTaxi = {};
+    unpaidDays.forEach(day => {
+        if (!summaryByTaxi[day.matricule]) {
+            summaryByTaxi[day.matricule] = {
+                matricule: day.matricule,
+                days: [],
+                totalDays: 0,
+                totalAmount: 0
+            };
+        }
+        summaryByTaxi[day.matricule].days.push(day);
+        summaryByTaxi[day.matricule].totalDays += 1;
+        summaryByTaxi[day.matricule].totalAmount += parseFloat(day.amount) || 0;
+    });
+    
+    // Trier par montant total décroissant
+    const sortedSummary = Object.values(summaryByTaxi).sort((a, b) => b.totalAmount - a.totalAmount);
+    
+    const html = `
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
+                    <tr>
+                        <th class="p-3 text-left">Matricule</th>
+                        <th class="p-3 text-right">Nombre de Jours</th>
+                        <th class="p-3 text-right">Montant Total</th>
+                        <th class="p-3 text-center">Détails</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    ${sortedSummary.map(item => {
+                        return `
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-3 font-medium text-slate-800">${item.matricule}</td>
+                                <td class="p-3 text-right text-slate-600">${item.totalDays} jour(s)</td>
+                                <td class="p-3 text-right font-bold text-red-600">${item.totalAmount.toLocaleString('fr-FR')} FCFA</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="showUnpaidDaysDetails('${item.matricule}')" 
+                                            class="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-xs font-medium">
+                                        <i class="fa-solid fa-eye mr-1"></i>Voir
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+// Fonction pour afficher les détails des jours non versés d'un taxi
+async function showUnpaidDaysDetails(matricule) {
+    const unpaidDays = allData.unpaidDays || [];
+    const taxiDays = unpaidDays.filter(d => d.matricule === matricule).sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    if (taxiDays.length === 0) {
+        showToast('Aucun jour non versé pour ce taxi', 'info');
+        return;
+    }
+    
+    const details = taxiDays.map(day => {
+        const dateStr = new Date(day.date).toLocaleDateString('fr-FR', { 
+            weekday: 'long', 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+        });
+        return `${dateStr}: ${day.amount.toLocaleString('fr-FR')} FCFA${day.reason ? ' - ' + day.reason : ''}`;
+    }).join('\n');
+    
+    alert(`Détails des jours non versés pour ${matricule}:\n\n${details}`);
+}
+
+// ============================================================
+// GESTION DES DÉPENSES
+// ============================================================
+
+async function getAllExpenses() {
+    try {
+        if (allData.expenses && Array.isArray(allData.expenses) && allData.expenses.length > 0) {
+            return allData.expenses.filter(e => e && typeof e === 'object');
+        }
+        return [];
+    } catch (error) {
+        console.error('Erreur getAllExpenses:', error);
+        return [];
+    }
+}
+
+async function addExpense(expense) {
+    if (currentRole === 'gestionnaire') {
+        try {
+            const result = await supabaseRequest('expenses', {
+                method: 'POST',
+                body: {
+                    matricule: expense.matricule,
+                    date: expense.date,
+                    type: expense.type,
+                    description: expense.description || '',
+                    amount: parseFloat(expense.amount) || 0,
+                    provider: expense.provider || '',
+                    invoice_number: expense.invoiceNumber || '',
+                    receipt_url: expense.receiptUrl || ''
+                }
+            });
+
+            if (result && Array.isArray(result) && result.length > 0) {
+                expense.id = result[0].id;
+                await fetchDataFromSupabase();
+                showToast('Dépense ajoutée avec succès dans Supabase!', 'success');
+                return result[0].id;
+            } else {
+                throw new Error('Réponse Supabase invalide');
+            }
+        } catch (error) {
+            console.error('Erreur Supabase addExpense:', error);
+            showToast('Erreur lors de l\'ajout dans Supabase: ' + error.message, 'error');
+            throw error;
+        }
+    }
+}
+
+async function updateExpense(id, expense) {
+    if (currentRole === 'gestionnaire') {
+        try {
+            await supabaseRequest(`expenses?id=eq.${id}`, {
+                method: 'PATCH',
+                body: {
+                    matricule: expense.matricule,
+                    date: expense.date,
+                    type: expense.type,
+                    description: expense.description || '',
+                    amount: parseFloat(expense.amount) || 0,
+                    provider: expense.provider || '',
+                    invoice_number: expense.invoiceNumber || '',
+                    receipt_url: expense.receiptUrl || ''
+                }
+            });
+            
+            await fetchDataFromSupabase();
+            showToast('Dépense mise à jour avec succès dans Supabase!', 'success');
+        } catch (error) {
+            console.error('Erreur Supabase updateExpense:', error);
+            showToast('Erreur lors de la mise à jour dans Supabase: ' + error.message, 'error');
+            throw error;
+        }
+    }
+}
+
+async function deleteExpense(id) {
+    if (currentRole === 'gestionnaire') {
+        try {
+            await supabaseRequest(`expenses?id=eq.${id}`, {
+                method: 'DELETE'
+            });
+            
+            await fetchDataFromSupabase();
+            showToast('Dépense supprimée avec succès!', 'success');
+        } catch (error) {
+            console.error('Erreur Supabase deleteExpense:', error);
+            showToast('Erreur lors de la suppression: ' + error.message, 'error');
+            throw error;
+        }
+    }
+}
+
+async function loadExpensesList() {
+    try {
+        const expenses = await getAllExpenses();
+        displayExpenses(expenses);
+        calculateExpensesStats(expenses);
+        setupExpenseFilters();
+    } catch (error) {
+        console.error('Erreur loadExpensesList:', error);
+    }
+}
+
+function displayExpenses(expenses) {
+    const tbody = document.getElementById('expensesTableBody');
+    if (!tbody) return;
+
+    if (!expenses || !Array.isArray(expenses) || expenses.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-400">Aucune dépense enregistrée</td></tr>';
+        return;
+    }
+
+    const validExpenses = expenses.filter(e => e && typeof e === 'object' && e.id !== undefined);
+    const isReadOnly = currentRole === 'lecteur';
+
+    const typeLabels = {
+        'garage': 'Garage',
+        'assurance': 'Assurance',
+        'pneu': 'Pneu',
+        'vidange': 'Vidange',
+        'carburant': 'Carburant',
+        'reparation': 'Réparation',
+        'autre': 'Autre'
+    };
+
+    const typeColors = {
+        'garage': 'bg-orange-100 text-orange-700',
+        'assurance': 'bg-blue-100 text-blue-700',
+        'pneu': 'bg-purple-100 text-purple-700',
+        'vidange': 'bg-green-100 text-green-700',
+        'carburant': 'bg-yellow-100 text-yellow-700',
+        'reparation': 'bg-red-100 text-red-700',
+        'autre': 'bg-slate-100 text-slate-700'
+    };
+
+    const html = validExpenses.map(expense => {
+        const dateStr = new Date(expense.date).toLocaleDateString('fr-FR');
+        const typeLabel = typeLabels[expense.type] || expense.type;
+        const typeColor = typeColors[expense.type] || typeColors['autre'];
+        const actionButtons = isReadOnly ? '' : `
+            <button class="btn btn-sm btn-primary" onclick="editExpense(${expense.id})">
+                <i class="fas fa-edit"></i>
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="confirmDeleteExpense(${expense.id})">
+                <i class="fas fa-trash"></i>
+            </button>
+        `;
+
+        return `
+            <tr class="hover:bg-slate-50">
+                <td class="p-4">${dateStr}</td>
+                <td class="p-4 font-medium">${expense.matricule}</td>
+                <td class="p-4">
+                    <span class="px-2 py-1 rounded text-xs font-medium ${typeColor}">${typeLabel}</span>
+                </td>
+                <td class="p-4">${expense.description || '-'}</td>
+                <td class="p-4 text-right font-bold">${parseFloat(expense.amount || 0).toLocaleString('fr-FR')} FCFA</td>
+                <td class="p-4 text-center">${actionButtons}</td>
+            </tr>
+        `;
+    }).join('');
+
+    tbody.innerHTML = html;
+}
+
+function calculateExpensesStats(expenses) {
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    const monthExpenses = expenses.filter(e => {
+        const expenseDate = new Date(e.date);
+        return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+    });
+
+    const monthTotal = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const garageTotal = monthExpenses.filter(e => e.type === 'garage').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const assuranceTotal = monthExpenses.filter(e => e.type === 'assurance').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    const otherTotal = monthTotal - garageTotal - assuranceTotal;
+
+    const monthTotalEl = document.getElementById('expensesMonthTotal');
+    const garageTotalEl = document.getElementById('expensesGarageTotal');
+    const assuranceTotalEl = document.getElementById('expensesAssuranceTotal');
+    const otherTotalEl = document.getElementById('expensesOtherTotal');
+
+    if (monthTotalEl) monthTotalEl.textContent = monthTotal.toLocaleString('fr-FR') + ' FCFA';
+    if (garageTotalEl) garageTotalEl.textContent = garageTotal.toLocaleString('fr-FR') + ' FCFA';
+    if (assuranceTotalEl) assuranceTotalEl.textContent = assuranceTotal.toLocaleString('fr-FR') + ' FCFA';
+    if (otherTotalEl) otherTotalEl.textContent = otherTotal.toLocaleString('fr-FR') + ' FCFA';
+}
+
+function setupExpenseFilters() {
+    const filterTaxi = document.getElementById('filterExpenseTaxi');
+    const filterType = document.getElementById('filterExpenseType');
+    const filterDate = document.getElementById('filterExpenseDate');
+    const clearBtn = document.getElementById('clearExpenseFilters');
+
+    if (filterTaxi) {
+        const taxis = allData.taxis || [];
+        filterTaxi.innerHTML = '<option value="">Tous les taxis</option>' + 
+            taxis.map(t => `<option value="${t.matricule}">${t.matricule}</option>`).join('');
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+            if (filterTaxi) filterTaxi.value = '';
+            if (filterType) filterType.value = '';
+            if (filterDate) filterDate.value = '';
+            loadExpensesList();
+        });
+    }
+
+    [filterTaxi, filterType, filterDate].forEach(filter => {
+        if (filter) {
+            filter.addEventListener('change', () => {
+                applyExpenseFilters();
+            });
+        }
+    });
+}
+
+function applyExpenseFilters() {
+    const expenses = allData.expenses || [];
+    const filterTaxi = document.getElementById('filterExpenseTaxi')?.value || '';
+    const filterType = document.getElementById('filterExpenseType')?.value || '';
+    const filterDate = document.getElementById('filterExpenseDate')?.value || '';
+
+    let filtered = expenses;
+
+    if (filterTaxi) {
+        filtered = filtered.filter(e => e.matricule === filterTaxi);
+    }
+    if (filterType) {
+        filtered = filtered.filter(e => e.type === filterType);
+    }
+    if (filterDate) {
+        filtered = filtered.filter(e => e.date === filterDate);
+    }
+
+    displayExpenses(filtered);
+}
+
+function initExpenseModal() {
+    const modal = document.getElementById('expenseModal');
+    if (!modal) return;
+
+    const closeBtn = modal.querySelector('.close');
+    const closeModalBtn = modal.querySelector('.close-modal');
+    
+    const closeModal = () => {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    };
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    const form = document.getElementById('expenseForm');
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await handleExpenseSubmit();
+        });
+    }
+
+    const addBtn = document.getElementById('addExpenseBtn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            openExpenseModal();
+        });
+    }
+}
+
+function openExpenseModal(expenseId = null) {
+    const modal = document.getElementById('expenseModal');
+    const form = document.getElementById('expenseForm');
+    const title = document.getElementById('expenseModalTitle');
+    
+    if (!modal || !form) return;
+
+    if (expenseId) {
+        const expense = allData.expenses.find(e => e.id === expenseId);
+        if (expense) {
+            if (title) title.textContent = 'Modifier une Dépense';
+            document.getElementById('expenseId').value = expense.id;
+            document.getElementById('expenseMatricule').value = expense.matricule;
+            document.getElementById('expenseDate').value = expense.date;
+            document.getElementById('expenseType').value = expense.type;
+            document.getElementById('expenseDescription').value = expense.description || '';
+            document.getElementById('expenseAmount').value = expense.amount || 0;
+            document.getElementById('expenseProvider').value = expense.provider || '';
+            document.getElementById('expenseInvoiceNumber').value = expense.invoiceNumber || '';
+        }
+    } else {
+        if (title) title.textContent = 'Ajouter une Dépense';
+        form.reset();
+        document.getElementById('expenseId').value = '';
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('expenseDate').value = today;
+    }
+
+    loadTaxisDropdown('expenseMatricule');
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+}
+
+async function handleExpenseSubmit() {
+    const id = document.getElementById('expenseId').value;
+    const expense = {
+        matricule: document.getElementById('expenseMatricule').value,
+        date: document.getElementById('expenseDate').value,
+        type: document.getElementById('expenseType').value,
+        description: document.getElementById('expenseDescription').value,
+        amount: document.getElementById('expenseAmount').value,
+        provider: document.getElementById('expenseProvider').value,
+        invoiceNumber: document.getElementById('expenseInvoiceNumber').value
+    };
+
+    try {
+        if (id) {
+            await updateExpense(id, expense);
+        } else {
+            await addExpense(expense);
+        }
+
+        const modal = document.getElementById('expenseModal');
+        if (modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+
+        loadExpensesList();
+    } catch (error) {
+        console.error('Erreur handleExpenseSubmit:', error);
+    }
+}
+
+function editExpense(id) {
+    openExpenseModal(id);
+}
+
+async function confirmDeleteExpense(id) {
+    if (confirm('Êtes-vous sûr de vouloir supprimer cette dépense ?')) {
+        try {
+            await deleteExpense(id);
+            loadExpensesList();
+        } catch (error) {
+            console.error('Erreur confirmDeleteExpense:', error);
+        }
     }
 }
 
@@ -4446,6 +5905,12 @@ window.closeUpdateNotification = closeUpdateNotification;
 window.refreshAllData = refreshAllData;
 window.showPage = showPage;
 window.showToast = showToast;
+window.showRecipeDetail = showRecipeDetail;
+window.showRecipeDetailModal = showRecipeDetailModal;
+window.closeRecipeDetailModal = closeRecipeDetailModal;
+window.editRecipe = editRecipe;
+window.confirmDeleteRecipe = confirmDeleteRecipe;
+window.openMissingRecipeModal = openMissingRecipeModal;
 window.refreshDataBtn = null; // Sera défini plus tard
 
 // Fonction pour forcer l'initialisation des événements (pour iOS)
