@@ -1564,122 +1564,245 @@ function displayRecipes(recipes, sorted = false) {
             `;
         }).filter(html => html).join('');
 
-        // Générer le HTML pour les cartes (mobile)
+        // Générer le HTML pour les cartes (mobile) - Regroupé par jour
         const cardsContainer = document.getElementById('recipesCardsContainer');
         if (cardsContainer) {
             if (sortedRecipes.length === 0) {
                 cardsContainer.innerHTML = '<div class="text-center py-8 text-slate-400">Aucune recette enregistrée</div>';
             } else {
-                const cardsHTML = sortedRecipes.map(recipe => {
-                    if (!recipe || typeof recipe !== 'object') {
-                        return '';
-                    }
-
-                    const recipeId = recipe.id || 0;
-                    const montantVerse = parseFloat(recipe.montantVerse) || 0;
-                    const recetteNormale = parseFloat(recipe.recetteNormale) || 0;
-                    const difference = montantVerse - recetteNormale;
-                    let badgeClass = 'correct';
-                    let badgeText = 'Correct';
-                    let badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
-
-                    if (difference < 0) {
-                        badgeClass = 'deficit';
-                        badgeText = 'Déficit';
-                        badgeColor = 'bg-red-100 text-red-800 border-red-300';
-                    } else if (difference > 0) {
-                        badgeClass = 'surplus';
-                        badgeText = 'Surplus';
-                        badgeColor = 'bg-green-100 text-green-800 border-green-300';
-                    }
-
-                    let dateStr = 'N/A';
+                // Regrouper les recettes par jour
+                const recipesByDay = {};
+                sortedRecipes.forEach(recipe => {
+                    if (!recipe || typeof recipe !== 'object') return;
+                    
+                    let dateKey = 'N/A';
                     try {
                         if (recipe.date) {
-                            dateStr = new Date(recipe.date).toLocaleDateString('fr-FR', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric'
-                            });
+                            const date = new Date(recipe.date);
+                            dateKey = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
                         }
                     } catch (error) {
                         console.warn('Erreur formatage date:', error);
                     }
+                    
+                    if (!recipesByDay[dateKey]) {
+                        recipesByDay[dateKey] = [];
+                    }
+                    recipesByDay[dateKey].push(recipe);
+                });
 
-                    const actionButtonsMobile = isReadOnly ? `
-                        <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors" onclick="showRecipeDetail(${recipeId})">
-                            <i class="fas fa-eye mr-2"></i>Voir
-                        </button>
-                    ` : `
-                        <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors" onclick="showRecipeDetail(${recipeId})">
-                            <i class="fas fa-eye mr-2"></i>Voir
-                        </button>
-                        <button class="flex-1 px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors" onclick="editRecipe(${recipeId})">
-                            <i class="fas fa-edit mr-2"></i>Modifier
-                        </button>
-                        <button class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors" onclick="confirmDeleteRecipe(${recipeId})">
-                            <i class="fas fa-trash mr-2"></i>Supprimer
-                        </button>
-                    `;
+                // Générer les cartes groupées par jour
+                const cardsHTML = Object.keys(recipesByDay).sort((a, b) => {
+                    if (a === 'N/A') return 1;
+                    if (b === 'N/A') return -1;
+                    return b.localeCompare(a); // Plus récent en premier
+                }).map((dateKey, index) => {
+                    const dayRecipes = recipesByDay[dateKey];
+                    const dayGroupId = `day-group-${dateKey.replace(/[^a-zA-Z0-9]/g, '-')}-${index}`;
+                    
+                    // Calculer les totaux pour le jour
+                    let totalVerse = 0;
+                    let totalAttendu = 0;
+                    dayRecipes.forEach(recipe => {
+                        totalVerse += parseFloat(recipe.montantVerse) || 0;
+                        totalAttendu += parseFloat(recipe.recetteNormale) || 0;
+                    });
+                    const totalDifference = totalVerse - totalAttendu;
 
+                    // Formatage de la date d'en-tête
+                    let dateHeader = dateKey;
+                    try {
+                        if (dateKey !== 'N/A') {
+                            const date = new Date(dateKey);
+                            dateHeader = date.toLocaleDateString('fr-FR', {
+                                weekday: 'long',
+                                day: '2-digit',
+                                month: 'long',
+                                year: 'numeric'
+                            });
+                            // Capitaliser la première lettre
+                            dateHeader = dateHeader.charAt(0).toUpperCase() + dateHeader.slice(1);
+                        }
+                    } catch (error) {
+                        console.warn('Erreur formatage date header:', error);
+                    }
+
+                    // Générer les cartes individuelles pour chaque recette du jour
+                    const recipesCards = dayRecipes.map(recipe => {
+                        const recipeId = recipe.id || 0;
+                        const montantVerse = parseFloat(recipe.montantVerse) || 0;
+                        const recetteNormale = parseFloat(recipe.recetteNormale) || 0;
+                        const difference = montantVerse - recetteNormale;
+                        let badgeClass = 'correct';
+                        let badgeText = 'Correct';
+                        let badgeColor = 'bg-blue-100 text-blue-800 border-blue-300';
+
+                        if (difference < 0) {
+                            badgeClass = 'deficit';
+                            badgeText = 'Déficit';
+                            badgeColor = 'bg-red-100 text-red-800 border-red-300';
+                        } else if (difference > 0) {
+                            badgeClass = 'surplus';
+                            badgeText = 'Surplus';
+                            badgeColor = 'bg-green-100 text-green-800 border-green-300';
+                        }
+
+                        const actionButtonsMobile = isReadOnly ? `
+                            <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors" onclick="showRecipeDetail(${recipeId})">
+                                <i class="fas fa-eye mr-1"></i>Voir
+                            </button>
+                        ` : `
+                            <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors" onclick="showRecipeDetail(${recipeId})">
+                                <i class="fas fa-eye mr-1"></i>Voir
+                            </button>
+                            <button class="flex-1 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 transition-colors" onclick="editRecipe(${recipeId})">
+                                <i class="fas fa-edit mr-1"></i>Modifier
+                            </button>
+                            <button class="flex-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 transition-colors" onclick="confirmDeleteRecipe(${recipeId})">
+                                <i class="fas fa-trash mr-1"></i>Supprimer
+                            </button>
+                        `;
+
+                        return `
+                            <div class="recipe-card-item">
+                                <div class="recipe-card-header">
+                                    <div class="recipe-card-info">
+                                        <div class="recipe-card-matricule">
+                                            <i class="fas fa-taxi"></i> ${(recipe.matricule || '').toString()}
+                                        </div>
+                                        <div class="recipe-card-chauffeur">
+                                            <i class="fas fa-user"></i> ${(recipe.chauffeur || '').toString()}
+                                        </div>
+                                    </div>
+                                    <span class="recipe-card-badge ${badgeClass}">
+                                        <i class="fas ${difference < 0 ? 'fa-arrow-down' : difference > 0 ? 'fa-arrow-up' : 'fa-equals'}"></i> ${badgeText}
+                                    </span>
+                                </div>
+                                
+                                <div class="recipe-card-amounts">
+                                    <div class="recipe-amount-row">
+                                        <span class="recipe-amount-label">
+                                            <i class="fas fa-wallet"></i> Attendue
+                                        </span>
+                                        <span class="recipe-amount-value amount-attendu">${recetteNormale.toLocaleString()} FCFA</span>
+                                    </div>
+                                    
+                                    <div class="recipe-amount-row">
+                                        <span class="recipe-amount-label">
+                                            <i class="fas fa-money-bill-wave"></i> Versée
+                                        </span>
+                                        <span class="recipe-amount-value ${difference < 0 ? 'amount-negative' : difference > 0 ? 'amount-positive' : 'amount-neutral'}">
+                                            ${montantVerse.toLocaleString()} FCFA
+                                        </span>
+                                    </div>
+                                    
+                                    ${difference !== 0 ? `
+                                    <div class="recipe-difference-row ${difference < 0 ? 'difference-negative' : 'difference-positive'}">
+                                        <span class="recipe-difference-label">
+                                            <i class="fas fa-chart-line"></i> Différence
+                                        </span>
+                                        <span class="recipe-difference-value">
+                                            ${difference > 0 ? '+' : ''}${difference.toLocaleString()} FCFA
+                                        </span>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                                
+                                <div class="recipe-card-actions">
+                                    ${actionButtonsMobile}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    // En-tête du jour avec totaux (cliquable pour plier/déplier)
                     return `
-                        <div class="bg-white rounded-xl shadow-sm border-2 border-slate-200 p-4 hover:shadow-md transition-all">
-                            <div class="flex justify-between items-start mb-3">
-                                <div>
-                                    <div class="text-sm font-semibold text-slate-500 mb-1">
-                                        <i class="far fa-calendar mr-2"></i>${dateStr}
+                        <div class="mb-4 day-group-container">
+                            <div class="day-group-header-wrapper" onclick="toggleDayGroup('${dayGroupId}')">
+                                <div class="day-group-header">
+                                    <div class="day-group-header-top">
+                                        <div class="day-group-header-left">
+                                            <div class="day-group-icon-wrapper">
+                                                <i class="fas fa-chevron-down day-group-icon" id="${dayGroupId}-icon"></i>
+                                            </div>
+                                            <div class="day-group-title">
+                                                <div class="day-group-date-icon">
+                                                    <i class="far fa-calendar-alt"></i>
+                                                </div>
+                                                <div>
+                                                    <div class="day-group-date-text">${dateHeader}</div>
+                                                    <div class="day-group-subtitle">
+                                                        <i class="fas fa-receipt"></i> ${dayRecipes.length} versement${dayRecipes.length > 1 ? 's' : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="day-group-hint-wrapper">
+                                            <span class="day-group-hint">
+                                                <i class="fas fa-hand-pointer"></i> Cliquer pour voir
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div class="text-lg font-bold text-slate-800">
-                                        ${(recipe.matricule || '').toString()}
+                                    <div class="day-group-totals">
+                                        <div class="day-group-total-item">
+                                            <div class="day-group-total-label">
+                                                <i class="fas fa-wallet"></i> Total Attendu
+                                            </div>
+                                            <div class="day-group-total-value total-attendu">${totalAttendu.toLocaleString()} FCFA</div>
+                                        </div>
+                                        <div class="day-group-total-divider"></div>
+                                        <div class="day-group-total-item">
+                                            <div class="day-group-total-label">
+                                                <i class="fas fa-money-bill-wave"></i> Total Versé
+                                            </div>
+                                            <div class="day-group-total-value ${totalDifference < 0 ? 'total-negative' : totalDifference > 0 ? 'total-positive' : 'total-neutral'}">
+                                                ${totalVerse.toLocaleString()} FCFA
+                                            </div>
+                                        </div>
+                                        <div class="day-group-total-divider"></div>
+                                        <div class="day-group-total-item">
+                                            <div class="day-group-total-label">
+                                                <i class="fas fa-chart-line"></i> Écart
+                                            </div>
+                                            <div class="day-group-total-value ${totalDifference < 0 ? 'total-negative' : totalDifference > 0 ? 'total-positive' : 'total-neutral'}">
+                                                ${totalDifference > 0 ? '+' : ''}${totalDifference.toLocaleString()} FCFA
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <span class="px-3 py-1 rounded-lg text-xs font-bold border-2 ${badgeColor}">
-                                    ${badgeText}
-                                </span>
                             </div>
-                            
-                            <div class="space-y-2 mb-4">
-                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                                    <span class="text-sm text-slate-600 font-medium">
-                                        <i class="fas fa-user mr-2 text-slate-400"></i>Chauffeur
-                                    </span>
-                                    <span class="text-sm font-bold text-slate-800">${(recipe.chauffeur || '').toString()}</span>
+                            <div class="day-group-content collapsed" id="${dayGroupId}-content">
+                                <div class="space-y-2 mt-2">
+                                    ${recipesCards}
                                 </div>
-                                
-                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                                    <span class="text-sm text-slate-600 font-medium">
-                                        <i class="fas fa-wallet mr-2 text-slate-400"></i>Attendue
-                                    </span>
-                                    <span class="text-sm font-bold text-slate-800">${recetteNormale.toLocaleString()} FCFA</span>
-                                </div>
-                                
-                                <div class="flex justify-between items-center py-2 border-b border-slate-100">
-                                    <span class="text-sm text-slate-600 font-medium">
-                                        <i class="fas fa-money-bill-wave mr-2 text-slate-400"></i>Versée
-                                    </span>
-                                    <span class="text-base font-bold ${difference < 0 ? 'text-red-600' : difference > 0 ? 'text-green-600' : 'text-blue-600'}">
-                                        ${montantVerse.toLocaleString()} FCFA
-                                    </span>
-                                </div>
-                                
-                                ${difference !== 0 ? `
-                                <div class="flex justify-between items-center py-2 bg-slate-50 rounded-lg px-3">
-                                    <span class="text-sm font-semibold text-slate-700">Différence</span>
-                                    <span class="text-base font-bold ${difference < 0 ? 'text-red-600' : 'text-green-600'}">
-                                        ${difference > 0 ? '+' : ''}${difference.toLocaleString()} FCFA
-                                    </span>
-                                </div>
-                                ` : ''}
-                            </div>
-                            
-                            <div class="flex gap-2 mt-4">
-                                ${actionButtonsMobile}
                             </div>
                         </div>
                     `;
-                }).filter(html => html).join('');
+                }).join('');
                 
                 cardsContainer.innerHTML = cardsHTML;
+                
+                // Initialiser tous les groupes en état plié après le rendu
+                setTimeout(() => {
+                    document.querySelectorAll('.day-group-content').forEach(content => {
+                        if (content.classList.contains('collapsed')) {
+                            content.style.maxHeight = '0px';
+                            const icon = document.getElementById(content.id.replace('-content', '-icon'));
+                            if (icon) {
+                                icon.style.transform = 'rotate(-90deg)';
+                            }
+                            // S'assurer que l'indication "Cliquer pour voir" est visible
+                            const dayGroupId = content.id.replace('-content', '');
+                            const header = document.querySelector(`[onclick="toggleDayGroup('${dayGroupId}')"]`);
+                            if (header) {
+                                const hint = header.querySelector('.day-group-hint');
+                                if (hint) {
+                                    hint.style.display = 'inline';
+                                }
+                            }
+                        }
+                    });
+                }, 100);
             }
         }
 
@@ -1691,6 +1814,40 @@ function displayRecipes(recipes, sorted = false) {
         const cardsContainer = document.getElementById('recipesCardsContainer');
         if (cardsContainer) {
             cardsContainer.innerHTML = '<div class="text-center py-8 text-slate-400">Erreur lors de l\'affichage des recettes</div>';
+        }
+    }
+}
+
+// Fonction pour plier/déplier un groupe de jour
+function toggleDayGroup(dayGroupId) {
+    const content = document.getElementById(`${dayGroupId}-content`);
+    const icon = document.getElementById(`${dayGroupId}-icon`);
+    const header = document.querySelector(`[onclick="toggleDayGroup('${dayGroupId}')"]`);
+    const hint = header ? header.querySelector('.day-group-hint') : null;
+    
+    if (!content || !icon) return;
+    
+    const isCollapsed = content.classList.contains('collapsed');
+    
+    if (isCollapsed) {
+        // Déplier
+        content.classList.remove('collapsed');
+        // Calculer la hauteur réelle du contenu
+        const contentHeight = content.scrollHeight;
+        content.style.maxHeight = contentHeight + 'px';
+        icon.style.transform = 'rotate(0deg)';
+        // Cacher l'indication "Cliquer pour voir"
+        if (hint) {
+            hint.style.display = 'none';
+        }
+    } else {
+        // Plier
+        content.classList.add('collapsed');
+        content.style.maxHeight = '0px';
+        icon.style.transform = 'rotate(-90deg)';
+        // Afficher l'indication "Cliquer pour voir"
+        if (hint) {
+            hint.style.display = 'inline';
         }
     }
 }
