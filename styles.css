@@ -1127,6 +1127,346 @@ body.role-lecteur .bg-white.rounded-xl.p-6.shadow-sm.border.border-slate-100:hov
     min-height: 200px;
 }
 
+/* Styles pour les cartes de dépenses */
+#expensesCardsContainer {
+    min-height: 200px;
+}
+
+/* ==========================================================================
+   STYLES AMÉLIORÉS POUR LES CARTES DE STATISTIQUES DES DÉPENSES
+   ========================================================================== */
+
+/* Carte de statistique de base */
+.expense-stat-card {
+    background: white;
+    border-radius: 0.875rem;
+    padding: 1rem 1.25rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 1.5px solid rgba(226, 232, 240, 0.8);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.expense-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, currentColor, transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.expense-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: rgba(203, 213, 225, 1);
+}
+
+.expense-stat-card:hover::before {
+    opacity: 0.6;
+}
+
+/* Icône de la carte */
+.expense-card-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.125rem;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+}
+
+.expense-stat-card:hover .expense-card-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+/* Styles spécifiques par type de carte */
+.expense-card-total {
+    border-left: 3px solid #3b82f6;
+}
+
+.expense-card-total::before {
+    color: #3b82f6;
+}
+
+.expense-icon-total {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.2) 100%);
+    color: #3b82f6;
+}
+
+.expense-card-garage {
+    border-left: 3px solid #f97316;
+}
+
+.expense-card-garage::before {
+    color: #f97316;
+}
+
+.expense-icon-garage {
+    background: linear-gradient(135deg, rgba(249, 115, 22, 0.1) 0%, rgba(249, 115, 22, 0.2) 100%);
+    color: #f97316;
+}
+
+.expense-card-assurance {
+    border-left: 3px solid #3b82f6;
+}
+
+.expense-card-assurance::before {
+    color: #3b82f6;
+}
+
+.expense-icon-assurance {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.2) 100%);
+    color: #3b82f6;
+}
+
+.expense-card-week {
+    border-left: 3px solid #3b82f6;
+}
+
+.expense-card-week::before {
+    color: #3b82f6;
+}
+
+.expense-icon-week {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.2) 100%);
+    color: #3b82f6;
+}
+
+/* Responsive pour les cartes de dépenses */
+@media (max-width: 640px) {
+    .expense-stat-card {
+        padding: 0.875rem 1rem;
+    }
+    
+    .expense-card-icon {
+        width: 2rem;
+        height: 2rem;
+        font-size: 1rem;
+    }
+}
+
+/* ==========================================================================
+   STYLES POUR LES CARTES HEBDOMADAIRES COMPACTES ET CLIQUABLES
+   ========================================================================== */
+
+.expense-week-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.expense-week-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    transform: scaleY(0);
+    transition: transform 0.3s ease;
+}
+
+.expense-week-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.expense-week-card:hover::before {
+    transform: scaleY(1);
+}
+
+.expense-week-card:hover .fa-chevron-right {
+    color: #3b82f6;
+    transform: translateX(4px);
+}
+
+.expense-week-card .fa-chevron-right {
+    transition: all 0.3s ease;
+}
+
+/* Responsive pour les cartes hebdomadaires */
+@media (max-width: 640px) {
+    .expense-week-card {
+        padding: 0.75rem;
+    }
+}
+
+/* ==========================================================================
+   STYLES POUR LA LISTE DES DÉPENSES DANS LE MODAL
+   ========================================================================== */
+
+.expense-list-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.expense-list-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.expense-list-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.expense-list-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.expense-list-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Carte d'item de dépense */
+.expense-item-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.expense-item-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    transform: scaleY(0);
+    transition: transform 0.2s ease;
+}
+
+.expense-item-card:hover {
+    transform: translateX(2px);
+}
+
+.expense-item-card:hover::before {
+    transform: scaleY(1);
+}
+
+/* Icône de type de dépense */
+.expense-type-icon {
+    transition: all 0.2s ease;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.expense-item-card:hover .expense-type-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+/* Badge de type */
+.expense-badge {
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.expense-item-card:hover .expense-badge {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Amélioration du modal pour les dépenses */
+.expense-modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.expense-total-card {
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+    transition: all 0.3s ease;
+}
+
+.expense-total-card:hover {
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.15);
+    transform: translateY(-2px);
+}
+
+/* Classes de couleur pour les types de dépenses */
+.expense-type-orange {
+    background: rgba(249, 115, 22, 0.1);
+    border-color: rgba(249, 115, 22, 0.3) !important;
+    color: rgba(194, 65, 12, 1);
+}
+
+.expense-type-blue {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: rgba(59, 130, 246, 0.3) !important;
+    color: rgba(30, 64, 175, 1);
+}
+
+.expense-type-gray {
+    background: rgba(107, 114, 128, 0.1);
+    border-color: rgba(107, 114, 128, 0.3) !important;
+    color: rgba(55, 65, 81, 1);
+}
+
+.expense-type-yellow {
+    background: rgba(234, 179, 8, 0.1);
+    border-color: rgba(234, 179, 8, 0.3) !important;
+    color: rgba(161, 98, 7, 1);
+}
+
+.expense-type-green {
+    background: rgba(34, 197, 94, 0.1);
+    border-color: rgba(34, 197, 94, 0.3) !important;
+    color: rgba(20, 83, 45, 1);
+}
+
+.expense-type-red {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3) !important;
+    color: rgba(153, 27, 27, 1);
+}
+
+.expense-type-purple {
+    background: rgba(168, 85, 247, 0.1);
+    border-color: rgba(168, 85, 247, 0.3) !important;
+    color: rgba(107, 33, 168, 1);
+}
+
+/* Icône de type pour la répartition (plus petite) */
+.expense-type-icon-small {
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-width: 1.5px;
+}
+
+/* Responsive pour la liste des dépenses */
+@media (max-width: 640px) {
+    .expense-item-card {
+        padding: 0.75rem;
+    }
+    
+    .expense-type-icon {
+        width: 2rem;
+        height: 2rem;
+        padding: 0.5rem;
+    }
+    
+    .expense-item-card p {
+        font-size: 0.8125rem;
+    }
+}
+
 #recipesCardsContainer > div {
     animation: slideUpFade 0.3s ease-out;
     animation-fill-mode: both;
@@ -1457,6 +1797,121 @@ body.role-lecteur .bg-white.rounded-xl.p-6.shadow-sm.border.border-slate-100:hov
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+}
+
+/* ==========================================================================
+   STYLES POUR LES GROUPES DE JOUR DES DÉPENSES
+   ========================================================================== */
+
+/* En-tête de jour pour les dépenses */
+.expense-day-header {
+    background: linear-gradient(135deg, rgba(248, 250, 252, 1) 0%, rgba(241, 245, 249, 1) 100%);
+    border: 2px solid rgba(226, 232, 240, 1);
+    border-radius: 12px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    position: relative;
+    overflow: hidden;
+    user-select: none;
+}
+
+.expense-day-header::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, rgba(59, 130, 246, 1) 0%, rgba(99, 102, 241, 1) 100%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.expense-day-header:hover {
+    background: linear-gradient(135deg, rgba(241, 245, 249, 1) 0%, rgba(226, 232, 240, 1) 100%);
+    border-color: rgba(203, 213, 225, 1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.expense-day-header:hover::before {
+    opacity: 1;
+}
+
+.expense-day-header .fas.fa-chevron-down {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    font-size: 0.875rem;
+    color: rgba(59, 130, 246, 1);
+    transform: rotate(-90deg);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+    border-radius: 6px;
+}
+
+.expense-day-header:hover .fas.fa-chevron-down {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+    transform: rotate(-90deg) scale(1.1);
+}
+
+/* Contenu dépliable des dépenses */
+.expense-day-content {
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.expense-day-content:not(.collapsed) {
+    display: table-row !important;
+    opacity: 1;
+}
+
+.expense-day-content.collapsed {
+    display: none !important;
+    opacity: 0;
+}
+
+/* Styles pour les lignes de dépenses dans le contenu déplié */
+.expense-day-content table {
+    width: 100%;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.expense-day-content .expense-row {
+    transition: background-color 0.2s ease;
+}
+
+.expense-day-content .expense-row:hover {
+    background-color: rgba(241, 245, 249, 0.8) !important;
+}
+
+/* Animation pour l'icône chevron */
+.expense-day-header .fas.fa-chevron-down[style*="rotate(0deg)"] {
+    transform: rotate(0deg) !important;
+}
+
+.expense-day-header .fas.fa-chevron-down[style*="rotate(-90deg)"] {
+    transform: rotate(-90deg) !important;
+}
+
+/* Amélioration visuelle du total du jour */
+.expense-day-header .font-bold.text-lg.text-brand-600 {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Style pour l'indicateur de groupe */
+.expense-row .text-xs.text-slate-400 {
+    font-size: 0.7rem;
+    font-style: italic;
+    margin-left: 0.25rem;
 }
 
 /* ==========================================================================

@@ -592,73 +592,89 @@
           <!-- VIEW: EXPENSES -->
           <!-- ============================ -->
           <div id="view-expenses" class="view-section">
-            <div class="flex justify-between items-center mb-6">
-              <h3 class="font-bold text-lg text-slate-800">Gestion des Dépenses</h3>
-              <button id="addExpenseBtn" class="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 shadow-sm role-gestionnaire">
-                <i class="fa-solid fa-plus mr-2"></i>Nouvelle Dépense
-              </button>
+            <!-- Header amélioré avec layout responsive -->
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <h3 class="font-bold text-xl sm:text-2xl text-slate-800">Gestion des Dépenses</h3>
+              <div class="flex flex-wrap gap-2">
+                <button id="exportExpensesCSV" class="px-3 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 shadow-sm transition-all hover:scale-105 text-sm">
+                  <i class="fa-solid fa-file-csv mr-1.5"></i><span class="hidden sm:inline">Export CSV</span><span class="sm:hidden">CSV</span>
+                </button>
+                <button id="exportExpensesPDF" class="px-3 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 shadow-sm transition-all hover:scale-105 text-sm">
+                  <i class="fa-solid fa-file-pdf mr-1.5"></i><span class="hidden sm:inline">Export PDF</span><span class="sm:hidden">PDF</span>
+                </button>
+                <button id="addExpenseBtn" class="px-3 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 shadow-sm role-gestionnaire transition-all hover:scale-105 text-sm">
+                  <i class="fa-solid fa-plus mr-1.5"></i><span class="hidden sm:inline">Nouvelle Dépense</span><span class="sm:hidden">Nouvelle</span>
+                </button>
+              </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500 mb-1">Total Ce Mois</p>
-                <h3 class="text-2xl font-bold text-slate-800" id="expensesMonthTotal">0 FCFA</h3>
+            <!-- Cartes Mois et Semaine côte à côte -->
+            <div class="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
+              <div class="expense-stat-card expense-card-total">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <p class="text-xs sm:text-sm text-slate-500 mb-1.5 font-medium">Mois</p>
+                    <h3 class="text-lg sm:text-xl md:text-2xl font-bold text-slate-800" id="expensesMonthTotal">0 FCFA</h3>
+                  </div>
+                  <div class="expense-card-icon expense-icon-total">
+                    <i class="fa-solid fa-calendar"></i>
+                  </div>
+                </div>
               </div>
-              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500 mb-1">Garage</p>
-                <h3 class="text-2xl font-bold text-orange-600" id="expensesGarageTotal">0 FCFA</h3>
-              </div>
-              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500 mb-1">Assurance</p>
-                <h3 class="text-2xl font-bold text-blue-600" id="expensesAssuranceTotal">0 FCFA</h3>
-              </div>
-              <div class="bg-white rounded-xl p-4 shadow-sm border border-slate-100">
-                <p class="text-sm text-slate-500 mb-1">Autres</p>
-                <h3 class="text-2xl font-bold text-purple-600" id="expensesOtherTotal">0 FCFA</h3>
+              <div class="expense-stat-card expense-card-week">
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <p class="text-xs sm:text-sm text-slate-500 mb-1.5 font-medium">Semaine</p>
+                    <h3 class="text-lg sm:text-xl md:text-2xl font-bold text-blue-600" id="expensesWeekTotal">0 FCFA</h3>
+                  </div>
+                  <div class="expense-card-icon expense-icon-week">
+                    <i class="fa-solid fa-calendar-week"></i>
+                  </div>
+                </div>
               </div>
             </div>
+
+            <div class="mb-6">
+              <h4 class="text-lg font-bold text-slate-800 mb-4">📅 Dépenses par Semaine</h4>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="expensesWeeklyCards">
+                <!-- Les cartes hebdomadaires seront générées ici -->
+              </div>
+            </div>
+
+            <div id="vidangeAlertsContainer" class="mb-4"></div>
 
             <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
               <div class="p-4 border-b border-slate-100 bg-slate-50/50">
-                <div class="flex flex-col md:flex-row gap-4">
-                  <select id="filterExpenseTaxi" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
-                    <option value="">Tous les taxis</option>
-                  </select>
-                  <select id="filterExpenseType" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
-                    <option value="">Tous les types</option>
-                    <option value="garage">Garage</option>
-                    <option value="assurance">Assurance</option>
-                    <option value="pneu">Pneu</option>
-                    <option value="vidange">Vidange</option>
-                    <option value="carburant">Carburant</option>
-                    <option value="reparation">Réparation</option>
-                    <option value="autre">Autre</option>
-                  </select>
-                  <input type="date" id="filterExpenseDate" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
-                  <button id="clearExpenseFilters" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50">
-                    <i class="fa-solid fa-times mr-2"></i>Effacer
-                  </button>
+                <div class="flex flex-col gap-4">
+                  <div class="relative w-full">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                    <input type="text" id="searchExpenseInput" placeholder="Rechercher par matricule, description, facture..." class="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:border-brand-500 outline-none">
+                  </div>
+                  <div class="flex flex-col md:flex-row gap-4">
+                    <select id="filterExpenseTaxi" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
+                      <option value="">Tous les taxis</option>
+                    </select>
+                    <select id="filterExpenseType" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
+                      <option value="">Tous les types</option>
+                      <option value="garage">Garage</option>
+                      <option value="assurance">Assurance</option>
+                      <option value="pneu">Pneu</option>
+                      <option value="vidange">Vidange</option>
+                      <option value="carburant">Carburant</option>
+                      <option value="reparation">Réparation</option>
+                      <option value="autre">Autre</option>
+                    </select>
+                    <input type="date" id="filterExpenseDateStart" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none" placeholder="Date début">
+                    <input type="date" id="filterExpenseDateEnd" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none" placeholder="Date fin">
+                    <button id="clearExpenseFilters" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50">
+                      <i class="fa-solid fa-times mr-2"></i>Effacer
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm">
-                  <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
-                    <tr>
-                      <th class="p-4">Date</th>
-                      <th class="p-4">Matricule</th>
-                      <th class="p-4">Type</th>
-                      <th class="p-4">Description</th>
-                      <th class="p-4 text-right">Montant</th>
-                      <th class="p-4 text-center role-gestionnaire">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-slate-100" id="expensesTableBody">
-                    <tr>
-                      <td colspan="6" class="text-center py-8 text-slate-400">Aucune dépense enregistrée</td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div class="p-2 space-y-2" id="expensesCardsContainer">
+                <div class="text-center py-8 text-slate-400">Aucune dépense enregistrée</div>
               </div>
             </div>
           </div>
@@ -669,17 +685,46 @@
           <div id="view-stats" class="view-section">
             <h3 class="font-bold text-lg text-slate-800 mb-6">Analyses graphiques</h3>
             
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-              <!-- Recettes par Jour (7 derniers jours) -->
-              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Recettes par Jour (7 derniers jours)</h4>
-                <canvas id="chartDaily"></canvas>
-              </div>
+            <!-- Section Recettes -->
+            <div class="mb-8">
+              <h4 class="text-lg font-bold text-slate-700 mb-4">📊 Recettes</h4>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Recettes par Jour (7 derniers jours) -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Recettes par Jour (7 derniers jours)</h4>
+                  <canvas id="chartDaily"></canvas>
+                </div>
 
-              <!-- Recettes par Matricule -->
-              <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-                <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Recettes par Matricule</h4>
-                <canvas id="chartMatricule"></canvas>
+                <!-- Recettes par Matricule -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Recettes par Matricule</h4>
+                  <canvas id="chartMatricule"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Section Dépenses -->
+            <div class="mb-8">
+              <h4 class="text-lg font-bold text-slate-700 mb-4">💰 Dépenses</h4>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Dépenses par Type (Ce Mois)</h4>
+                  <canvas id="chartExpensesByType"></canvas>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Dépenses par Taxi (Ce Mois)</h4>
+                  <canvas id="chartExpensesByTaxi"></canvas>
+                </div>
+              </div>
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Évolution des Dépenses (7 derniers jours)</h4>
+                  <canvas id="chartExpensesEvolution"></canvas>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                  <h4 class="text-sm font-bold text-slate-500 uppercase mb-6">Répartition Mensuelle (6 derniers mois)</h4>
+                  <canvas id="chartExpensesMonthly"></canvas>
+                </div>
               </div>
             </div>
 
@@ -1001,6 +1046,38 @@
     </div>
 
     <!-- Scripts nécessaires -->
+    <!-- Firebase SDK -->
+    <script type="module">
+      // Import the functions you need from the SDKs you need
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
+      import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-messaging.js";
+
+      // Your web app's Firebase configuration
+      const firebaseConfig = {
+        apiKey: "AIzaSyDXJ85EaH9uKOSwLvxLuwv1mi1XWv9Ua_0",
+        authDomain: "couronne-de-vie-aef98.firebaseapp.com",
+        projectId: "couronne-de-vie-aef98",
+        storageBucket: "couronne-de-vie-aef98.firebasestorage.app",
+        messagingSenderId: "437542193700",
+        appId: "1:437542193700:web:0f2e355ae486660c75e6b1"
+      };
+
+      // Initialize Firebase
+      const app = initializeApp(firebaseConfig);
+      
+      // Initialize Firebase Cloud Messaging and get a reference to the service
+      let messaging = null;
+      if ('serviceWorker' in navigator) {
+        messaging = getMessaging(app);
+        
+        // Expose messaging and functions to global scope for use in other scripts
+        window.firebaseMessaging = messaging;
+        window.firebaseApp = app;
+        window.firebaseGetToken = getToken;
+        window.firebaseOnMessage = onMessage;
+      }
+    </script>
+    
     <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     
@@ -1060,16 +1137,6 @@
             <form id="expenseForm">
                 <input type="hidden" id="expenseId">
                 <div class="form-group">
-                    <label>Matricule *</label>
-                    <select id="expenseMatricule" required>
-                        <option value="">Sélectionner un taxi</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Date *</label>
-                    <input type="date" id="expenseDate" required>
-                </div>
-                <div class="form-group">
                     <label>Type de Dépense *</label>
                     <select id="expenseType" required>
                         <option value="">Sélectionner un type</option>
@@ -1082,17 +1149,37 @@
                         <option value="autre">Autre</option>
                     </select>
                 </div>
+                <div class="form-group" id="expenseScopeGroup" style="display: none;">
+                    <label>Portée *</label>
+                    <select id="expenseScope">
+                        <option value="vehicule">Par véhicule</option>
+                        <option value="groupe">Par groupe</option>
+                    </select>
+                </div>
+                <div class="form-group" id="expenseMatriculeGroup">
+                    <label>Matricule *</label>
+                    <select id="expenseMatricule" required>
+                        <option value="">Sélectionner un taxi</option>
+                    </select>
+                </div>
+                <div class="form-group" id="expenseMatriculesGroup" style="display: none;">
+                    <label>Véhicules (sélection multiple) *</label>
+                    <select id="expenseMatricules" multiple size="5" style="min-height: 120px;">
+                    </select>
+                    <small style="color: #666; font-size: 0.85rem;">Maintenez Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs véhicules</small>
+                </div>
+                <div class="form-group">
+                    <label>Date *</label>
+                    <input type="date" id="expenseDate" required>
+                </div>
                 <div class="form-group">
                     <label>Description</label>
                     <textarea id="expenseDescription" rows="3" placeholder="Détails de la dépense..."></textarea>
                 </div>
                 <div class="form-group">
-                    <label>Montant (FCFA) *</label>
+                    <label id="expenseAmountLabel">Montant (FCFA) *</label>
                     <input type="number" id="expenseAmount" step="0.01" min="0" required>
-                </div>
-                <div class="form-group">
-                    <label>Fournisseur/Prestataire</label>
-                    <input type="text" id="expenseProvider" placeholder="Nom du garage, assurance...">
+                    <small id="expenseAmountHint" style="color: #666; font-size: 0.85rem; display: none;">Montant total pour tous les véhicules du groupe</small>
                 </div>
                 <div class="form-group">
                     <label>Numéro de Facture</label>
@@ -1257,6 +1344,9 @@
 
     <!-- Script de compatibilité (doit être chargé avant app.js) -->
     <script src="compatibility.js"></script>
+    
+    <!-- Firebase Messaging pour les notifications push -->
+    <script src="firebase-messaging-sw.js"></script>
     
     <!-- Scripts de l'application -->
     <script src="app.js"></script>

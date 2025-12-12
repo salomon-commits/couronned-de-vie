@@ -169,3 +169,92 @@ self.addEventListener('message', (event) => {
   }
 });
 
+// ============================================
+// GESTION DES NOTIFICATIONS PUSH FCM
+// ============================================
+
+// Écouter les notifications push en arrière-plan (quand l'app est fermée)
+self.addEventListener('push', (event) => {
+  console.log('[Service Worker] Notification push reçue:', event);
+  
+  let notificationData = {
+    title: 'Couronne de Vie',
+    body: 'Vous avez une nouvelle notification',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: 'default',
+    data: {}
+  };
+
+  // Si les données sont disponibles dans l'événement
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      console.log('[Service Worker] Payload reçu:', payload);
+      
+      notificationData = {
+        title: payload.notification?.title || payload.data?.title || 'Couronne de Vie',
+        body: payload.notification?.body || payload.data?.body || 'Vous avez une nouvelle notification',
+        icon: payload.notification?.icon || payload.data?.icon || '/icon-192.png',
+        badge: payload.notification?.badge || payload.data?.badge || '/icon-192.png',
+        tag: payload.data?.tag || payload.notification?.tag || 'default',
+        data: payload.data || {},
+        requireInteraction: payload.notification?.requireInteraction || false,
+        actions: payload.notification?.actions || []
+      };
+    } catch (error) {
+      console.error('[Service Worker] Erreur lors du parsing des données:', error);
+      // Utiliser les données textuelles si le JSON échoue
+      const text = event.data.text();
+      if (text) {
+        notificationData.body = text;
+      }
+    }
+  }
+
+  // Afficher la notification
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, {
+      body: notificationData.body,
+      icon: notificationData.icon,
+      badge: notificationData.badge,
+      tag: notificationData.tag,
+      data: notificationData.data,
+      requireInteraction: notificationData.requireInteraction,
+      actions: notificationData.actions,
+      vibrate: [200, 100, 200],
+      timestamp: Date.now()
+    })
+  );
+});
+
+// Gérer les clics sur les notifications
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Service Worker] Notification cliquée:', event);
+  
+  event.notification.close();
+
+  // Ouvrir ou focaliser l'application
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Si une fenêtre est déjà ouverte, la focaliser
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      
+      // Sinon, ouvrir une nouvelle fenêtre
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});
+
+// Gérer la fermeture des notifications
+self.addEventListener('notificationclose', (event) => {
+  console.log('[Service Worker] Notification fermée:', event);
+});
+

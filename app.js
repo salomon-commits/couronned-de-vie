@@ -202,9 +202,190 @@ function handleLogin(code = null, directRole = null) {
     return false;
 }
 
+// ============================================================
+// 🔔 GESTION DES NOTIFICATIONS PUSH FCM
+// ============================================================
+
+/**
+ * Demande la permission pour les notifications et génère le token d'abonnement FCM
+ * @returns {Promise<string|null>} Le token FCM ou null si l'abonnement échoue
+ */
+async function subscribeToPushNotifications() {
+    try {
+        // Vérifier que le service worker est supporté
+        if (!('serviceWorker' in navigator)) {
+            console.warn('[FCM] Service Worker non supporté par ce navigateur');
+            showToast('Les notifications push ne sont pas supportées sur ce navigateur', 'warning');
+            return null;
+        }
+
+        // Vérifier que les notifications sont supportées
+        if (!('Notification' in window)) {
+            console.warn('[FCM] Les notifications ne sont pas supportées par ce navigateur');
+            showToast('Les notifications ne sont pas supportées sur ce navigateur', 'warning');
+            return null;
+        }
+
+        // Vérifier que Firebase Messaging est disponible
+        if (!window.firebaseMessaging) {
+            console.warn('[FCM] Firebase Messaging non initialisé');
+            // Attendre un peu que Firebase se charge
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!window.firebaseMessaging) {
+                console.error('[FCM] Firebase Messaging toujours non disponible');
+                showToast('Erreur: Firebase n\'est pas chargé. Veuillez recharger la page.', 'error');
+                return null;
+            }
+        }
+
+        // Étape 1: Demander la permission pour les notifications
+        let permission = Notification.permission;
+        
+        if (permission === 'default') {
+            console.log('[FCM] Demande de permission pour les notifications...');
+            permission = await Notification.requestPermission();
+        }
+
+        if (permission !== 'granted') {
+            console.warn('[FCM] Permission de notification refusée:', permission);
+            if (permission === 'denied') {
+                showToast('Les notifications ont été refusées. Activez-les dans les paramètres du navigateur.', 'warning');
+            } else {
+                showToast('Permission de notification non accordée', 'warning');
+            }
+            return null;
+        }
+
+        console.log('[FCM] Permission accordée, génération du token...');
+
+        // Étape 2: Attendre que le service worker soit prêt
+        const registration = await navigator.serviceWorker.ready;
+        console.log('[FCM] Service Worker prêt');
+
+        // Étape 3: Vérifier que les fonctions Firebase sont disponibles
+        if (!window.firebaseGetToken) {
+            console.warn('[FCM] Fonction getToken non disponible, attente...');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            if (!window.firebaseGetToken) {
+                console.error('[FCM] Impossible de charger getToken');
+                showToast('Erreur lors de l\'initialisation des notifications', 'error');
+                return null;
+            }
+        }
+
+        // Étape 4: Générer le token FCM
+        const VAPID_KEY = 'BP8GceHxhiJ7vGlZ0Q_Ri-EEg6M5QBvoIwSjocGOIhqZaoEhv3vui7ijoCE17bBjXtzwsAY9QCWJe2Z6EG8smoA';
+        const messaging = window.firebaseMessaging;
+        const getToken = window.firebaseGetToken;
+
+        try {
+            const token = await getToken(messaging, {
+                vapidKey: VAPID_KEY,
+                serviceWorkerRegistration: registration
+            });
+
+            if (token) {
+                console.log('[FCM] ✅ Token généré avec succès:', token);
+                
+                // Stocker le token dans localStorage
+                localStorage.setItem('fcmToken', token);
+                localStorage.setItem('fcmTokenTimestamp', Date.now().toString());
+                
+                // Configurer l'écoute des messages en foreground
+                if (window.firebaseOnMessage) {
+                    window.firebaseOnMessage(messaging, (payload) => {
+                        console.log('[FCM] Message reçu en foreground:', payload);
+                        handlePushNotification(payload);
+                    });
+                }
+
+                showToast('Notifications push activées avec succès', 'success');
+                
+                // Optionnel: Envoyer le token à votre serveur
+                // await sendTokenToServer(token);
+                
+                return token;
+            } else {
+                console.warn('[FCM] Aucun token généré');
+                showToast('Impossible de générer le token de notification', 'warning');
+                return null;
+            }
+        } catch (tokenError) {
+            console.error('[FCM] Erreur lors de la génération du token:', tokenError);
+            
+            // Gestion des erreurs spécifiques
+            if (tokenError.code === 'messaging/permission-blocked') {
+                showToast('Les notifications sont bloquées. Activez-les dans les paramètres.', 'error');
+            } else if (tokenError.code === 'messaging/permission-default') {
+                showToast('Permission de notification requise', 'warning');
+            } else {
+                showToast('Erreur lors de l\'abonnement aux notifications', 'error');
+            }
+            
+            return null;
+        }
+    } catch (error) {
+        console.error('[FCM] Erreur lors de l\'abonnement:', error);
+        showToast('Erreur lors de l\'abonnement aux notifications push', 'error');
+        return null;
+    }
+}
+
+/**
+ * Gère l'affichage d'une notification push reçue
+ * @param {Object} payload - Le payload de la notification
+ */
+function handlePushNotification(payload) {
+    const notificationTitle = payload.notification?.title || 'Couronne de Vie';
+    const notificationBody = payload.notification?.body || 'Nouvelle notification';
+    
+    // Afficher une notification système
+    if ('Notification' in window && Notification.permission === 'granted') {
+        navigator.serviceWorker.ready.then((registration) => {
+            registration.showNotification(notificationTitle, {
+                body: notificationBody,
+                icon: payload.notification?.icon || '/icon-192.png',
+                badge: '/icon-192.png',
+                tag: payload.data?.tag || 'default',
+                data: payload.data || {},
+                requireInteraction: false,
+                vibrate: [200, 100, 200]
+            });
+        });
+    }
+    
+    // Optionnel: Afficher aussi un toast dans l'application
+    showToast(notificationBody, 'info');
+}
+
+/**
+ * Vérifie si l'utilisateur est déjà abonné aux notifications
+ * @returns {boolean} True si un token existe
+ */
+function isSubscribedToNotifications() {
+    const token = localStorage.getItem('fcmToken');
+    return token !== null && token.length > 0;
+}
+
+/**
+ * Récupère le token FCM actuel
+ * @returns {string|null} Le token FCM ou null
+ */
+function getCurrentFCMToken() {
+    return localStorage.getItem('fcmToken');
+}
+
 // Fonction pour déconnexion
 function handleLogout() {
     if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
+        // Supprimer le token FCM lors de la déconnexion
+        if (window.deleteFCMToken) {
+            window.deleteFCMToken();
+        }
+        // Supprimer aussi du localStorage
+        localStorage.removeItem('fcmToken');
+        localStorage.removeItem('fcmTokenTimestamp');
+        
         sessionStorage.removeItem('userRole');
         currentRole = null;
         document.body.classList.remove('role-lecteur');
@@ -587,9 +768,12 @@ async function fetchDataFromSupabase() {
             type: e.type || 'autre',
             description: e.description || '',
             amount: parseFloat(e.amount) || 0,
-            provider: e.provider || '',
             invoiceNumber: e.invoice_number || '',
             receiptUrl: e.receipt_url || '',
+            // Utiliser la colonne is_group_expense si disponible, sinon détecter via la description
+            is_group_expense: e.is_group_expense !== undefined ? e.is_group_expense : ((e.description || '').includes('[GROUPE:') || false),
+            group_total: e.group_total || null,
+            group_vehicles: e.group_vehicles || null,
             createdAt: e.created_at || ''
         })) : [];
         
@@ -3092,13 +3276,23 @@ async function showDriverHistory(driverName) {
 let chartDaily = null;
 let chartMatricule = null;
 let chartDeficit = null;
+let chartExpensesByType = null;
+let chartExpensesByTaxi = null;
+let chartExpensesEvolution = null;
+let chartExpensesMonthly = null;
+
+// Variables pour le tri des dépenses
+let expenseSortColumn = null;
+let expenseSortDirection = 'asc';
 
 // Statistiques
 async function loadStatistics() {
     const recipes = await getAllRecipes();
+    const expenses = await getAllExpenses();
     calculateStats(recipes);
     drawCharts(recipes);
     displayDriversRanking(recipes);
+    drawExpenseCharts(expenses);
     // Les statistiques par semaine et par mois sont calculées dans calculateStats()
 }
 
@@ -3997,27 +4191,82 @@ async function getAllExpenses() {
 async function addExpense(expense) {
     if (currentRole === 'gestionnaire') {
         try {
-            const result = await supabaseRequest('expenses', {
-                method: 'POST',
-                body: {
-                    matricule: expense.matricule,
-                    date: expense.date,
-                    type: expense.type,
-                    description: expense.description || '',
-                    amount: parseFloat(expense.amount) || 0,
-                    provider: expense.provider || '',
-                    invoice_number: expense.invoiceNumber || '',
-                    receipt_url: expense.receiptUrl || ''
-                }
-            });
-
-            if (result && Array.isArray(result) && result.length > 0) {
-                expense.id = result[0].id;
+            // Si c'est une dépense de groupe, créer une dépense par véhicule
+            if (expense.scope === 'groupe' && expense.matricules && expense.matricules.length > 0) {
+                const amountPerVehicle = parseFloat(expense.amount) / expense.matricules.length;
+                const groupTotal = parseFloat(expense.amount);
+                const groupVehicles = expense.matricules.join(',');
+                
+                // Utiliser les nouvelles colonnes si disponibles (après migration)
+                // Sinon, utiliser la description comme fallback
+                const promises = expense.matricules.map(async (matricule) => {
+                    const body = {
+                        matricule: matricule,
+                        date: expense.date,
+                        type: expense.type,
+                        description: expense.description || '',
+                        amount: amountPerVehicle,
+                        invoice_number: expense.invoiceNumber || '',
+                        receipt_url: expense.receiptUrl || ''
+                    };
+                    
+                    // Ajouter les champs de groupe (sera ignoré par Supabase si les colonnes n'existent pas)
+                    body.is_group_expense = true;
+                    body.group_total = groupTotal;
+                    body.group_vehicles = groupVehicles;
+                    
+                    try {
+                        return await supabaseRequest('expenses', {
+                            method: 'POST',
+                            body: body
+                        });
+                    } catch (error) {
+                        // Si erreur 400 (colonnes inexistantes), utiliser le fallback avec description
+                        if (error.message && error.message.includes('group_total')) {
+                            const groupInfo = `[GROUPE: ${groupVehicles} - Total: ${groupTotal.toLocaleString('fr-FR')} FCFA]`;
+                            body.description = expense.description 
+                                ? `${expense.description} ${groupInfo}` 
+                                : groupInfo;
+                            // Retirer les champs qui n'existent pas
+                            delete body.is_group_expense;
+                            delete body.group_total;
+                            delete body.group_vehicles;
+                            return await supabaseRequest('expenses', {
+                                method: 'POST',
+                                body: body
+                            });
+                        }
+                        throw error;
+                    }
+                });
+                
+                const results = await Promise.all(promises);
                 await fetchDataFromSupabase();
-                showToast('Dépense ajoutée avec succès dans Supabase!', 'success');
-                return result[0].id;
+                showToast(`${expense.matricules.length} dépense(s) de groupe ajoutée(s) avec succès!`, 'success');
+                return results[0]?.[0]?.id;
             } else {
-                throw new Error('Réponse Supabase invalide');
+                // Dépense individuelle
+                const result = await supabaseRequest('expenses', {
+                    method: 'POST',
+                    body: {
+                        matricule: expense.matricule,
+                        date: expense.date,
+                        type: expense.type,
+                        description: expense.description || '',
+                        amount: parseFloat(expense.amount) || 0,
+                        invoice_number: expense.invoiceNumber || '',
+                        receipt_url: expense.receiptUrl || ''
+                    }
+                });
+
+                if (result && Array.isArray(result) && result.length > 0) {
+                    expense.id = result[0].id;
+                    await fetchDataFromSupabase();
+                    showToast('Dépense ajoutée avec succès dans Supabase!', 'success');
+                    return result[0].id;
+                } else {
+                    throw new Error('Réponse Supabase invalide');
+                }
             }
         } catch (error) {
             console.error('Erreur Supabase addExpense:', error);
@@ -4038,7 +4287,6 @@ async function updateExpense(id, expense) {
                     type: expense.type,
                     description: expense.description || '',
                     amount: parseFloat(expense.amount) || 0,
-                    provider: expense.provider || '',
                     invoice_number: expense.invoiceNumber || '',
                     receipt_url: expense.receiptUrl || ''
                 }
@@ -4074,6 +4322,8 @@ async function deleteExpense(id) {
 async function loadExpensesList() {
     try {
         const expenses = await getAllExpenses();
+        // Afficher les alertes de vidange même s'il n'y a pas de dépenses
+        displayVidangeAlerts();
         displayExpenses(expenses);
         calculateExpensesStats(expenses);
         setupExpenseFilters();
@@ -4082,17 +4332,212 @@ async function loadExpensesList() {
     }
 }
 
-function displayExpenses(expenses) {
-    const tbody = document.getElementById('expensesTableBody');
-    if (!tbody) return;
+// Fonction pour calculer la prochaine date de vidange et vérifier les alertes
+function getVidangeAlertInfo(matricule, currentExpenseDate) {
+    if (!matricule || !currentExpenseDate) return null;
+    
+    const expenses = allData.expenses || [];
+    const vidanges = expenses.filter(e => 
+        e.type === 'vidange' && 
+        e.matricule === matricule &&
+        e.date
+    );
+    
+    if (vidanges.length === 0) return null;
+    
+    // Trier par date décroissante pour trouver la dernière vidange
+    vidanges.sort((a, b) => new Date(b.date) - new Date(a.date));
+    const lastVidange = vidanges[0];
+    const lastVidangeDate = new Date(lastVidange.date);
+    
+    // Calculer la prochaine vidange (15 jours après)
+    const nextVidangeDate = new Date(lastVidangeDate);
+    nextVidangeDate.setDate(nextVidangeDate.getDate() + 15);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const nextDate = new Date(nextVidangeDate);
+    nextDate.setHours(0, 0, 0, 0);
+    
+    // Calculer le nombre de jours jusqu'à la prochaine vidange
+    const daysUntil = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+    
+    // Si la vidange actuelle est la dernière, utiliser sa date
+    const currentDate = new Date(currentExpenseDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const isCurrentLast = currentDate.getTime() === lastVidangeDate.getTime();
+    
+    if (isCurrentLast) {
+        // Pour la dernière vidange, calculer la prochaine
+        const nextFromCurrent = new Date(currentDate);
+        nextFromCurrent.setDate(nextFromCurrent.getDate() + 15);
+        const daysFromCurrent = Math.ceil((nextFromCurrent - today) / (1000 * 60 * 60 * 24));
+        
+        return {
+            nextDate: nextFromCurrent,
+            daysUntil: daysFromCurrent,
+            isOverdue: daysFromCurrent < 0,
+            isDueSoon: daysFromCurrent >= 0 && daysFromCurrent <= 3
+        };
+    }
+    
+    return {
+        nextDate: nextVidangeDate,
+        daysUntil: daysUntil,
+        isOverdue: daysUntil < 0,
+        isDueSoon: daysUntil >= 0 && daysUntil <= 3
+    };
+}
 
-    if (!expenses || !Array.isArray(expenses) || expenses.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-slate-400">Aucune dépense enregistrée</td></tr>';
+// Fonction pour afficher les alertes de vidange en haut de la page
+function displayVidangeAlerts() {
+    const alertsContainer = document.getElementById('vidangeAlertsContainer');
+    if (!alertsContainer) return;
+
+    const expenses = allData.expenses || [];
+    const taxis = allData.taxis || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // Récupérer toutes les vidanges nécessitant une attention
+    const alerts = [];
+    const processedMatricules = new Set();
+
+    taxis.forEach(taxi => {
+        const matricule = taxi.matricule;
+        if (processedMatricules.has(matricule)) return;
+        processedMatricules.add(matricule);
+
+        const vidanges = expenses.filter(e => 
+            e.type === 'vidange' && 
+            e.matricule === matricule &&
+            e.date
+        );
+
+        if (vidanges.length === 0) return;
+
+        // Trier par date décroissante pour trouver la dernière vidange
+        vidanges.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const lastVidange = vidanges[0];
+        const lastVidangeDate = new Date(lastVidange.date);
+        lastVidangeDate.setHours(0, 0, 0, 0);
+
+        // Calculer la prochaine vidange (15 jours après)
+        const nextVidangeDate = new Date(lastVidangeDate);
+        nextVidangeDate.setDate(nextVidangeDate.getDate() + 15);
+
+        const nextDate = new Date(nextVidangeDate);
+        nextDate.setHours(0, 0, 0, 0);
+
+        // Calculer le nombre de jours jusqu'à la prochaine vidange
+        const daysUntil = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
+
+        // Afficher uniquement les alertes pour les vidanges en retard ou à venir dans les 3 prochains jours
+        if (daysUntil < 0 || (daysUntil >= 0 && daysUntil <= 3)) {
+            alerts.push({
+                matricule: matricule,
+                nextDate: nextVidangeDate,
+                daysUntil: daysUntil,
+                isOverdue: daysUntil < 0,
+                isDueSoon: daysUntil >= 0 && daysUntil <= 3
+            });
+        }
+    });
+
+    // Trier les alertes : en retard d'abord, puis par date
+    alerts.sort((a, b) => {
+        if (a.isOverdue && !b.isOverdue) return -1;
+        if (!a.isOverdue && b.isOverdue) return 1;
+        return a.daysUntil - b.daysUntil;
+    });
+
+    if (alerts.length === 0) {
+        alertsContainer.innerHTML = '';
         return;
     }
 
+    const overdueAlerts = alerts.filter(a => a.isOverdue);
+    const dueSoonAlerts = alerts.filter(a => a.isDueSoon && !a.isOverdue);
+
+    let alertsHTML = '';
+
+    if (overdueAlerts.length > 0) {
+        alertsHTML += `
+            <div class="mb-3 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg shadow-sm">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-exclamation-triangle text-red-600 text-xl mt-0.5"></i>
+                    <div class="flex-1">
+                        <div class="text-base font-bold text-red-800 mb-2">
+                            ⚠️ Vidanges en retard (${overdueAlerts.length})
+                        </div>
+                        <div class="space-y-1">
+                            ${overdueAlerts.map(alert => {
+                                const nextDateStr = alert.nextDate.toLocaleDateString('fr-FR', {
+                                    day: '2-digit',
+                                    month: 'long',
+                                    year: 'numeric'
+                                });
+                                return `
+                                    <div class="text-sm text-red-700">
+                                        <strong>${alert.matricule}</strong> : Prochaine vidange prévue le ${nextDateStr} 
+                                        <span class="font-bold">(${Math.abs(alert.daysUntil)} jour${Math.abs(alert.daysUntil) > 1 ? 's' : ''} de retard)</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    if (dueSoonAlerts.length > 0) {
+        alertsHTML += `
+            <div class="mb-3 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg shadow-sm">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-clock text-yellow-600 text-xl mt-0.5"></i>
+                    <div class="flex-1">
+                        <div class="text-base font-bold text-yellow-800 mb-2">
+                            ⏰ Vidanges à prévoir (${dueSoonAlerts.length})
+                        </div>
+                        <div class="space-y-1">
+                            ${dueSoonAlerts.map(alert => {
+                                const nextDateStr = alert.nextDate.toLocaleDateString('fr-FR', {
+                                    day: '2-digit',
+                                    month: 'long',
+                                    year: 'numeric'
+                                });
+                                return `
+                                    <div class="text-sm text-yellow-700">
+                                        <strong>${alert.matricule}</strong> : Prochaine vidange prévue le ${nextDateStr} 
+                                        <span class="font-bold">(dans ${alert.daysUntil} jour${alert.daysUntil > 1 ? 's' : ''})</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    alertsContainer.innerHTML = alertsHTML;
+}
+
+function displayExpenses(expenses) {
+    const cardsContainer = document.getElementById('expensesCardsContainer');
+    if (!cardsContainer) return;
+
     const validExpenses = expenses.filter(e => e && typeof e === 'object' && e.id !== undefined);
     const isReadOnly = currentRole === 'lecteur';
+
+    // Afficher les alertes de vidange
+    displayVidangeAlerts();
+
+    if (validExpenses.length === 0) {
+        cardsContainer.innerHTML = '<div class="text-center py-8 text-slate-400">Aucune dépense enregistrée</div>';
+        return;
+    }
 
     const typeLabels = {
         'garage': 'Garage',
@@ -4105,43 +4550,605 @@ function displayExpenses(expenses) {
     };
 
     const typeColors = {
-        'garage': 'bg-orange-100 text-orange-700',
-        'assurance': 'bg-blue-100 text-blue-700',
-        'pneu': 'bg-purple-100 text-purple-700',
-        'vidange': 'bg-green-100 text-green-700',
-        'carburant': 'bg-yellow-100 text-yellow-700',
-        'reparation': 'bg-red-100 text-red-700',
-        'autre': 'bg-slate-100 text-slate-700'
+        'garage': 'bg-orange-100 text-orange-700 border-orange-300',
+        'assurance': 'bg-blue-100 text-blue-700 border-blue-300',
+        'pneu': 'bg-purple-100 text-purple-700 border-purple-300',
+        'vidange': 'bg-green-100 text-green-700 border-green-300',
+        'carburant': 'bg-yellow-100 text-yellow-700 border-yellow-300',
+        'reparation': 'bg-red-100 text-red-700 border-red-300',
+        'autre': 'bg-slate-100 text-slate-700 border-slate-300'
     };
 
-    const html = validExpenses.map(expense => {
-        const dateStr = new Date(expense.date).toLocaleDateString('fr-FR');
-        const typeLabel = typeLabels[expense.type] || expense.type;
-        const typeColor = typeColors[expense.type] || typeColors['autre'];
-        const actionButtons = isReadOnly ? '' : `
-            <button class="btn btn-sm btn-primary" onclick="editExpense(${expense.id})">
-                <i class="fas fa-edit"></i>
-            </button>
-            <button class="btn btn-sm btn-danger" onclick="confirmDeleteExpense(${expense.id})">
-                <i class="fas fa-trash"></i>
-            </button>
-        `;
+    // Trier par date décroissante
+    const sortedExpenses = [...validExpenses].sort((a, b) => {
+        const dateA = new Date(a.date || 0);
+        const dateB = new Date(b.date || 0);
+        return dateB - dateA;
+    });
 
+    // Regrouper par jour
+    const expensesByDay = {};
+    sortedExpenses.forEach(expense => {
+        if (!expense || typeof expense !== 'object') return;
+        
+        let dateKey = 'N/A';
+        try {
+            if (expense.date) {
+                const date = new Date(expense.date);
+                dateKey = date.toISOString().split('T')[0];
+            }
+        } catch (error) {
+            console.warn('Erreur formatage date:', error);
+        }
+        
+        if (!expensesByDay[dateKey]) {
+            expensesByDay[dateKey] = [];
+        }
+        expensesByDay[dateKey].push(expense);
+    });
+
+    // Générer les cartes groupées par jour
+    const cardsHTML = Object.keys(expensesByDay).sort((a, b) => {
+        if (a === 'N/A') return 1;
+        if (b === 'N/A') return -1;
+        return b.localeCompare(a);
+    }).map((dateKey, index) => {
+        const dayExpenses = expensesByDay[dateKey];
+        const dayGroupId = `expense-day-group-${dateKey.replace(/[^a-zA-Z0-9]/g, '-')}-${index}`;
+        
+        // Calculer le total du jour
+        const dayTotal = dayExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+
+        // Formatage de la date d'en-tête
+        let dateHeader = dateKey;
+        try {
+            if (dateKey !== 'N/A') {
+                const date = new Date(dateKey);
+                dateHeader = date.toLocaleDateString('fr-FR', {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                dateHeader = dateHeader.charAt(0).toUpperCase() + dateHeader.slice(1);
+            }
+        } catch (error) {
+            console.warn('Erreur formatage date header:', error);
+        }
+
+        // Générer les cartes individuelles pour chaque dépense du jour
+        const expenseCards = dayExpenses.map(expense => {
+            const expenseId = expense.id || 0;
+            const amount = parseFloat(expense.amount || 0);
+            const typeLabel = typeLabels[expense.type] || expense.type;
+            const typeColor = typeColors[expense.type] || typeColors['autre'];
+            const dateStr = new Date(expense.date).toLocaleDateString('fr-FR');
+
+            // Vérifier l'alerte de vidange si c'est une vidange
+            let vidangeAlert = null;
+            if (expense.type === 'vidange' && expense.matricule) {
+                vidangeAlert = getVidangeAlertInfo(expense.matricule, expense.date);
+            }
+
+            const actionButtons = isReadOnly ? `
+                <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors" onclick="viewExpenseDetail(${expenseId})">
+                    <i class="fas fa-eye mr-1"></i>Voir
+                </button>
+            ` : `
+                <button class="flex-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors" onclick="viewExpenseDetail(${expenseId})">
+                    <i class="fas fa-eye mr-1"></i>Voir
+                </button>
+                <button class="flex-1 px-3 py-1.5 bg-brand-600 text-white rounded-lg text-xs font-medium hover:bg-brand-700 transition-colors" onclick="editExpense(${expenseId})">
+                    <i class="fas fa-edit mr-1"></i>Modifier
+                </button>
+                <button class="flex-1 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 transition-colors" onclick="confirmDeleteExpense(${expenseId})">
+                    <i class="fas fa-trash mr-1"></i>Supprimer
+                </button>
+            `;
+
+            // Générer le HTML de l'alerte de vidange
+            let alertHTML = '';
+            if (vidangeAlert) {
+                const nextDateStr = vidangeAlert.nextDate.toLocaleDateString('fr-FR', {
+                    day: '2-digit',
+                    month: 'long',
+                    year: 'numeric'
+                });
+                
+                if (vidangeAlert.isOverdue) {
+                    alertHTML = `
+                        <div class="mt-3 p-3 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-exclamation-triangle text-red-600"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-red-800">⚠️ Vidange en retard</div>
+                                    <div class="text-xs text-red-600 mt-1">
+                                        Prochaine vidange prévue le <strong>${nextDateStr}</strong> (${Math.abs(vidangeAlert.daysUntil)} jour${Math.abs(vidangeAlert.daysUntil) > 1 ? 's' : ''} de retard)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else if (vidangeAlert.isDueSoon) {
+                    alertHTML = `
+                        <div class="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-clock text-yellow-600"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-yellow-800">⏰ Vidange à prévoir</div>
+                                    <div class="text-xs text-yellow-600 mt-1">
+                                        Prochaine vidange prévue le <strong>${nextDateStr}</strong> (dans ${vidangeAlert.daysUntil} jour${vidangeAlert.daysUntil > 1 ? 's' : ''})
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    alertHTML = `
+                        <div class="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-info-circle text-blue-600"></i>
+                                <div class="flex-1">
+                                    <div class="text-sm font-bold text-blue-800">ℹ️ Prochaine vidange</div>
+                                    <div class="text-xs text-blue-600 mt-1">
+                                        Prochaine vidange prévue le <strong>${nextDateStr}</strong> (dans ${vidangeAlert.daysUntil} jour${vidangeAlert.daysUntil > 1 ? 's' : ''})
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+
+            return `
+                <div class="recipe-card-item">
+                    <div class="recipe-card-header">
+                        <div class="recipe-card-info">
+                            <div class="recipe-card-matricule">
+                                <i class="fas fa-taxi"></i> ${expense.matricule || 'N/A'}${expense.is_group_expense ? ' <span class="text-xs text-slate-400 italic">(Groupe)</span>' : ''}
+                            </div>
+                            <div class="recipe-card-chauffeur">
+                                <i class="far fa-calendar"></i> ${dateStr}
+                            </div>
+                        </div>
+                        <span class="recipe-card-badge ${typeColor} border">
+                            <i class="fas fa-tag"></i> ${typeLabel}
+                        </span>
+                    </div>
+                    
+                    <div class="recipe-card-amounts">
+                        <div class="recipe-amount-row">
+                            <span class="recipe-amount-label">
+                                <i class="fas fa-money-bill-wave"></i> Montant
+                            </span>
+                            <span class="recipe-amount-value amount-attendu">${amount.toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+                        ${expense.description ? `
+                        <div class="recipe-amount-row">
+                            <span class="recipe-amount-label">
+                                <i class="fas fa-file-alt"></i> Description
+                            </span>
+                            <span class="recipe-amount-value text-sm text-slate-600">${expense.description}</span>
+                        </div>
+                        ` : ''}
+                        ${expense.invoiceNumber ? `
+                        <div class="recipe-amount-row">
+                            <span class="recipe-amount-label">
+                                <i class="fas fa-receipt"></i> N° Facture
+                            </span>
+                            <span class="recipe-amount-value text-sm text-slate-600 font-mono">${expense.invoiceNumber}</span>
+                        </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${alertHTML}
+                    
+                    <div class="recipe-card-actions">
+                        ${actionButtons}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // En-tête du jour avec totaux (cliquable pour plier/déplier)
         return `
-            <tr class="hover:bg-slate-50">
-                <td class="p-4">${dateStr}</td>
-                <td class="p-4 font-medium">${expense.matricule}</td>
-                <td class="p-4">
-                    <span class="px-2 py-1 rounded text-xs font-medium ${typeColor}">${typeLabel}</span>
-                </td>
-                <td class="p-4">${expense.description || '-'}</td>
-                <td class="p-4 text-right font-bold">${parseFloat(expense.amount || 0).toLocaleString('fr-FR')} FCFA</td>
-                <td class="p-4 text-center">${actionButtons}</td>
-            </tr>
+            <div class="mb-4 day-group-container">
+                <div class="day-group-header-wrapper" onclick="toggleDayGroup('${dayGroupId}')">
+                    <div class="day-group-header">
+                        <div class="day-group-header-top">
+                            <div class="day-group-header-left">
+                                <div class="day-group-icon-wrapper">
+                                    <i class="fas fa-chevron-down day-group-icon" id="${dayGroupId}-icon"></i>
+                                </div>
+                                <div class="day-group-title">
+                                    <div class="day-group-date-icon">
+                                        <i class="far fa-calendar-alt"></i>
+                                    </div>
+                                    <div>
+                                        <div class="day-group-date-text">${dateHeader}</div>
+                                        <div class="day-group-subtitle">
+                                            <i class="fas fa-receipt"></i> ${dayExpenses.length} dépense${dayExpenses.length > 1 ? 's' : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="day-group-hint-wrapper">
+                                <span class="day-group-hint">
+                                    <i class="fas fa-hand-pointer"></i> Cliquer pour voir
+                                </span>
+                            </div>
+                        </div>
+                        <div class="day-group-totals">
+                            <div class="day-group-total-item">
+                                <div class="day-group-total-label">
+                                    <i class="fas fa-wallet"></i> Total du Jour
+                                </div>
+                                <div class="day-group-total-value total-attendu">${dayTotal.toLocaleString('fr-FR')} FCFA</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="day-group-content collapsed" id="${dayGroupId}-content">
+                    <div class="space-y-2 mt-2">
+                        ${expenseCards}
+                    </div>
+                </div>
+            </div>
         `;
     }).join('');
+    
+    cardsContainer.innerHTML = cardsHTML;
+    
+    // Initialiser tous les groupes en état plié après le rendu
+    setTimeout(() => {
+        document.querySelectorAll('.day-group-content').forEach(content => {
+            if (content.classList.contains('collapsed')) {
+                content.style.maxHeight = '0px';
+                const icon = document.getElementById(content.id.replace('-content', '-icon'));
+                if (icon) {
+                    icon.style.transform = 'rotate(-90deg)';
+                }
+                const dayGroupId = content.id.replace('-content', '');
+                const header = document.querySelector(`[onclick="toggleDayGroup('${dayGroupId}')"]`);
+                if (header) {
+                    const hint = header.querySelector('.day-group-hint');
+                    if (hint) {
+                        hint.style.display = 'inline';
+                    }
+                }
+            }
+        });
+    }, 100);
+}
 
-    tbody.innerHTML = html;
+
+// Fonction pour obtenir le début de la semaine (lundi)
+function getWeekStart(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Ajuster pour lundi = 1
+    const weekStart = new Date(d);
+    weekStart.setDate(diff);
+    return weekStart;
+}
+
+// Fonction pour formater la période de la semaine
+function formatWeekRange(weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    
+    const startStr = weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' });
+    const endStr = weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+    
+    return `${startStr} - ${endStr}`;
+}
+
+// Fonction pour calculer les dépenses par semaine
+function calculateWeeklyExpenses(expenses) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Obtenir le début de la semaine en cours (lundi)
+    const currentWeekStart = getWeekStart(today);
+    
+    // Créer un objet pour regrouper les dépenses par semaine
+    const weeklyExpenses = {};
+    
+    expenses.forEach(expense => {
+        if (!expense || !expense.date) return;
+        
+        const expenseDate = new Date(expense.date);
+        expenseDate.setHours(0, 0, 0, 0);
+        
+        // Obtenir le début de la semaine pour cette dépense
+        const weekStart = getWeekStart(expenseDate);
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weeklyExpenses[weekKey]) {
+            weeklyExpenses[weekKey] = {
+                weekStart: weekStart,
+                total: 0,
+                count: 0,
+                byType: {},
+                expenses: [] // Stocker les dépenses de la semaine
+            };
+        }
+        
+        const amount = parseFloat(expense.amount || 0);
+        weeklyExpenses[weekKey].total += amount;
+        weeklyExpenses[weekKey].count += 1;
+        weeklyExpenses[weekKey].expenses.push(expense); // Ajouter la dépense
+        
+        const type = expense.type || 'autre';
+        if (!weeklyExpenses[weekKey].byType[type]) {
+            weeklyExpenses[weekKey].byType[type] = 0;
+        }
+        weeklyExpenses[weekKey].byType[type] += amount;
+    });
+    
+    // Trier les semaines par date (plus récentes en premier)
+    const sortedWeeks = Object.entries(weeklyExpenses)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 4); // Prendre les 4 dernières semaines
+    
+    return sortedWeeks.map(([weekKey, data]) => ({
+        weekKey,
+        weekStart: data.weekStart,
+        total: data.total,
+        count: data.count,
+        byType: data.byType,
+        expenses: data.expenses, // Inclure les dépenses
+        isCurrentWeek: weekKey === currentWeekStart.toISOString().split('T')[0]
+    }));
+}
+
+// Fonction pour afficher les cartes hebdomadaires (compactes et cliquables)
+function displayWeeklyExpensesCards(expenses) {
+    const container = document.getElementById('expensesWeeklyCards');
+    if (!container) return;
+    
+    const weeklyData = calculateWeeklyExpenses(expenses);
+    
+    if (weeklyData.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-4 text-slate-400">Aucune dépense enregistrée</div>';
+        return;
+    }
+    
+    const cardsHTML = weeklyData.map((week, index) => {
+        const weekRange = formatWeekRange(week.weekStart);
+        const isCurrent = week.isCurrentWeek;
+        // Format court : jour mois (ex: "15 jan")
+        const weekDate = week.weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+        
+        return `
+            <div class="expense-week-card bg-white rounded-lg p-3 shadow-sm border ${isCurrent ? 'border-brand-500 border-2' : 'border-slate-100'} hover:shadow-md transition-all cursor-pointer" 
+                 onclick="showWeekExpensesDetails('${week.weekKey}', ${index})" 
+                 data-week-key="${week.weekKey}">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs text-slate-500 mb-1 font-medium">${weekDate}</p>
+                        <h3 class="text-base sm:text-lg font-bold text-slate-800">${week.total.toLocaleString('fr-FR')} FCFA</h3>
+                    </div>
+                    <div class="ml-2 flex-shrink-0">
+                        <i class="fa-solid fa-chevron-right text-slate-400 text-sm"></i>
+                    </div>
+                </div>
+                ${isCurrent ? '<span class="inline-block mt-2 px-2 py-0.5 bg-brand-100 text-brand-700 text-xs font-medium rounded">En cours</span>' : ''}
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = cardsHTML;
+    
+    // Stocker les données hebdomadaires globalement pour l'affichage des détails
+    window.weeklyExpensesData = weeklyData;
+}
+
+// Fonction pour afficher les détails d'une semaine
+function showWeekExpensesDetails(weekKey, index) {
+    if (!window.weeklyExpensesData || !window.weeklyExpensesData[index]) return;
+    
+    const week = window.weeklyExpensesData[index];
+    const weekRange = formatWeekRange(week.weekStart);
+    
+    // Créer le contenu du modal
+    const typeLabels = {
+        'garage': 'Garage',
+        'assurance': 'Assurance',
+        'pneu': 'Pneu',
+        'vidange': 'Vidange',
+        'carburant': 'Carburant',
+        'reparation': 'Réparation',
+        'autre': 'Autre'
+    };
+    
+    const getTypeStyleForBreakdown = (type) => {
+        const styles = {
+            'garage': { icon: 'fa-wrench', class: 'expense-type-orange' },
+            'assurance': { icon: 'fa-shield-halved', class: 'expense-type-blue' },
+            'pneu': { icon: 'fa-circle', class: 'expense-type-gray' },
+            'vidange': { icon: 'fa-oil-can', class: 'expense-type-yellow' },
+            'carburant': { icon: 'fa-gas-pump', class: 'expense-type-green' },
+            'reparation': { icon: 'fa-tools', class: 'expense-type-red' },
+            'autre': { icon: 'fa-ellipsis', class: 'expense-type-purple' }
+        };
+        return styles[type] || styles['autre'];
+    };
+    
+    const typeBreakdown = Object.entries(week.byType)
+        .sort((a, b) => b[1] - a[1]) // Trier par montant décroissant
+        .map(([type, amount]) => {
+            const typeStyle = getTypeStyleForBreakdown(type);
+            return `
+                <div class="flex justify-between items-center py-2.5 px-2 rounded-lg hover:bg-slate-50 transition-colors">
+                    <div class="flex items-center gap-2">
+                        <div class="expense-type-icon-small ${typeStyle.class} border rounded p-1.5">
+                            <i class="fa-solid ${typeStyle.icon} text-xs"></i>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700">${typeLabels[type] || type}</span>
+                    </div>
+                    <span class="text-sm font-bold text-slate-800">${amount.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+            `;
+        }).join('');
+    
+    // Fonction pour obtenir l'icône et la classe CSS selon le type
+    const getTypeStyle = (type) => {
+        const styles = {
+            'garage': { icon: 'fa-wrench', class: 'expense-type-orange' },
+            'assurance': { icon: 'fa-shield-halved', class: 'expense-type-blue' },
+            'pneu': { icon: 'fa-circle', class: 'expense-type-gray' },
+            'vidange': { icon: 'fa-oil-can', class: 'expense-type-yellow' },
+            'carburant': { icon: 'fa-gas-pump', class: 'expense-type-green' },
+            'reparation': { icon: 'fa-tools', class: 'expense-type-red' },
+            'autre': { icon: 'fa-ellipsis', class: 'expense-type-purple' }
+        };
+        return styles[type] || styles['autre'];
+    };
+    
+    // Fonction pour formater la description (gérer les groupes)
+    const formatDescription = (description) => {
+        if (!description) return 'Sans description';
+        
+        // Si c'est une description de groupe, la rendre plus compacte
+        if (description.includes('[GROUPE:')) {
+            const match = description.match(/\[GROUPE:([^\]]+)\]/);
+            if (match) {
+                const groupInfo = match[1];
+                const totalMatch = description.match(/Total: ([\d\s,]+) FCFA/);
+                const total = totalMatch ? totalMatch[1] : '';
+                return `Groupe de dépenses • Total: ${total} FCFA`;
+            }
+        }
+        return description;
+    };
+    
+    const expensesList = (week.expenses && week.expenses.length > 0) ? week.expenses
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .map((expense, idx) => {
+            const date = new Date(expense.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+            const typeStyle = getTypeStyle(expense.type || 'autre');
+            const description = formatDescription(expense.description);
+            const isGroup = expense.description && expense.description.includes('[GROUPE:');
+            
+            return `
+                <div class="expense-item-card bg-white rounded-lg p-3 mb-2 border border-slate-200 hover:shadow-md transition-all">
+                    <div class="flex items-start gap-3">
+                        <div class="expense-type-icon ${typeStyle.class} border-2 rounded-lg p-2 flex-shrink-0">
+                            <i class="fa-solid ${typeStyle.icon} text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-start justify-between gap-2 mb-1.5">
+                                <p class="text-sm font-semibold text-slate-800 flex-1 ${isGroup ? 'line-clamp-2' : ''}">${description}</p>
+                                <span class="text-base font-bold text-slate-800 whitespace-nowrap ml-2">${parseFloat(expense.amount || 0).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="expense-badge ${typeStyle.class} border px-2 py-0.5 rounded-md text-xs font-medium">
+                                    <i class="fa-solid ${typeStyle.icon} mr-1"></i>${typeLabels[expense.type] || expense.type}
+                                </span>
+                                <span class="text-xs text-slate-500 flex items-center gap-1">
+                                    <i class="fa-solid fa-calendar text-xs"></i>${date}
+                                </span>
+                                ${expense.matricule ? `
+                                    <span class="text-xs text-slate-500 flex items-center gap-1">
+                                        <i class="fa-solid fa-car text-xs"></i>${expense.matricule}
+                                    </span>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('') : '<div class="text-center py-8"><p class="text-sm text-slate-400"><i class="fa-solid fa-inbox mr-2"></i>Aucune dépense</p></div>';
+    
+    const modalContent = `
+        <div class="modal show" id="weekExpensesModal" onclick="event.stopPropagation()">
+            <div class="modal-content expense-modal-content" style="max-width: 700px;">
+                <span class="close" onclick="closeWeekExpensesModal()">&times;</span>
+                <div class="mb-6">
+                    <h3 class="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-week text-brand-600"></i>Dépenses de la semaine
+                    </h3>
+                    <p class="text-sm text-slate-500 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-slate-400"></i>${weekRange}
+                    </p>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="expense-total-card bg-gradient-to-br from-brand-50 to-blue-50 rounded-xl p-5 mb-4 border border-brand-200">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm font-medium text-slate-600 flex items-center gap-2">
+                                <i class="fa-solid fa-wallet text-brand-600"></i>Total de la semaine
+                            </span>
+                            <span class="text-3xl font-bold text-slate-800">${week.total.toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+                        <div class="flex items-center gap-4 text-xs text-slate-500">
+                            <span class="flex items-center gap-1">
+                                <i class="fa-solid fa-list"></i>${week.count} dépense${week.count > 1 ? 's' : ''}
+                            </span>
+                            <span class="flex items-center gap-1">
+                                <i class="fa-solid fa-chart-pie"></i>${Object.keys(week.byType).length} type${Object.keys(week.byType).length > 1 ? 's' : ''}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    ${typeBreakdown && Object.keys(week.byType).length > 0 ? `
+                        <div class="mb-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                    <i class="fa-solid fa-chart-pie text-brand-600"></i>Répartition par type
+                                </h4>
+                            </div>
+                            <div class="bg-white rounded-lg border border-slate-200 p-3 shadow-sm">
+                                ${typeBreakdown}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <i class="fa-solid fa-list text-brand-600"></i>Liste des dépenses
+                            </h4>
+                            <span class="text-xs text-slate-500">${week.expenses ? week.expenses.length : 0} élément${week.expenses && week.expenses.length > 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="bg-slate-50 rounded-lg border border-slate-200 p-3 max-h-96 overflow-y-auto expense-list-container">
+                            ${expensesList}
+                        </div>
+                    </div>
+                </div>
+                
+                <button onclick="closeWeekExpensesModal()" class="w-full px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Supprimer le modal existant s'il y en a un
+    const existingModal = document.getElementById('weekExpensesModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Ajouter le nouveau modal
+    document.body.insertAdjacentHTML('beforeend', modalContent);
+    
+    // Fermer en cliquant en dehors
+    document.getElementById('weekExpensesModal').addEventListener('click', function(e) {
+        if (e.target.id === 'weekExpensesModal') {
+            closeWeekExpensesModal();
+        }
+    });
+}
+
+// Fonction pour fermer le modal
+function closeWeekExpensesModal() {
+    const modal = document.getElementById('weekExpensesModal');
+    if (modal) {
+        modal.remove();
+    }
 }
 
 function calculateExpensesStats(expenses) {
@@ -4149,31 +5156,84 @@ function calculateExpensesStats(expenses) {
     const currentMonth = today.getMonth();
     const currentYear = today.getFullYear();
 
+    // Statistiques du mois en cours
     const monthExpenses = expenses.filter(e => {
         const expenseDate = new Date(e.date);
         return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
     });
 
     const monthTotal = monthExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    const garageTotal = monthExpenses.filter(e => e.type === 'garage').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    const assuranceTotal = monthExpenses.filter(e => e.type === 'assurance').reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
-    const otherTotal = monthTotal - garageTotal - assuranceTotal;
+    
+    // Calculer le total de la semaine en cours
+    const todayForWeek = new Date(today);
+    todayForWeek.setHours(0, 0, 0, 0);
+    const currentWeekStart = getWeekStart(todayForWeek);
+    const currentWeekEnd = new Date(currentWeekStart);
+    currentWeekEnd.setDate(currentWeekEnd.getDate() + 6);
+    currentWeekEnd.setHours(23, 59, 59, 999);
+    
+    const weekExpenses = expenses.filter(e => {
+        if (!e || !e.date) return false;
+        const expenseDate = new Date(e.date);
+        return expenseDate >= currentWeekStart && expenseDate <= currentWeekEnd;
+    });
+    const weekTotal = weekExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+    
+    // Afficher les cartes hebdomadaires
+    displayWeeklyExpensesCards(expenses);
 
+    // Statistiques par taxi (top 5)
+    const taxiStats = {};
+    monthExpenses.forEach(e => {
+        const taxi = e.matricule || 'Inconnu';
+        taxiStats[taxi] = (taxiStats[taxi] || 0) + parseFloat(e.amount || 0);
+    });
+    const topTaxis = Object.entries(taxiStats)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+    // Statistiques par type (détaillées)
+    const typeStats = {};
+    monthExpenses.forEach(e => {
+        const type = e.type || 'autre';
+        typeStats[type] = (typeStats[type] || 0) + parseFloat(e.amount || 0);
+    });
+
+    // Total de l'année
+    const yearExpenses = expenses.filter(e => {
+        const expenseDate = new Date(e.date);
+        return expenseDate.getFullYear() === currentYear;
+    });
+    const yearTotal = yearExpenses.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+
+    // Moyenne mensuelle
+    const monthsWithExpenses = new Set();
+    yearExpenses.forEach(e => {
+        const expenseDate = new Date(e.date);
+        monthsWithExpenses.add(`${expenseDate.getFullYear()}-${expenseDate.getMonth()}`);
+    });
+    const avgMonthly = monthsWithExpenses.size > 0 ? yearTotal / monthsWithExpenses.size : 0;
+
+    // Mise à jour des éléments HTML
     const monthTotalEl = document.getElementById('expensesMonthTotal');
-    const garageTotalEl = document.getElementById('expensesGarageTotal');
-    const assuranceTotalEl = document.getElementById('expensesAssuranceTotal');
-    const otherTotalEl = document.getElementById('expensesOtherTotal');
+    const weekTotalEl = document.getElementById('expensesWeekTotal');
 
     if (monthTotalEl) monthTotalEl.textContent = monthTotal.toLocaleString('fr-FR') + ' FCFA';
-    if (garageTotalEl) garageTotalEl.textContent = garageTotal.toLocaleString('fr-FR') + ' FCFA';
-    if (assuranceTotalEl) assuranceTotalEl.textContent = assuranceTotal.toLocaleString('fr-FR') + ' FCFA';
-    if (otherTotalEl) otherTotalEl.textContent = otherTotal.toLocaleString('fr-FR') + ' FCFA';
+    if (weekTotalEl) weekTotalEl.textContent = weekTotal.toLocaleString('fr-FR') + ' FCFA';
+
+    // Supprimer la section "Statistiques Détaillées" si elle existe
+    const statsContainer = document.getElementById('expensesDetailedStats');
+    if (statsContainer) {
+        statsContainer.remove();
+    }
 }
 
 function setupExpenseFilters() {
     const filterTaxi = document.getElementById('filterExpenseTaxi');
     const filterType = document.getElementById('filterExpenseType');
-    const filterDate = document.getElementById('filterExpenseDate');
+    const filterDateStart = document.getElementById('filterExpenseDateStart');
+    const filterDateEnd = document.getElementById('filterExpenseDateEnd');
+    const searchInput = document.getElementById('searchExpenseInput');
     const clearBtn = document.getElementById('clearExpenseFilters');
 
     if (filterTaxi) {
@@ -4186,36 +5246,66 @@ function setupExpenseFilters() {
         clearBtn.addEventListener('click', () => {
             if (filterTaxi) filterTaxi.value = '';
             if (filterType) filterType.value = '';
-            if (filterDate) filterDate.value = '';
+            if (filterDateStart) filterDateStart.value = '';
+            if (filterDateEnd) filterDateEnd.value = '';
+            if (searchInput) searchInput.value = '';
             loadExpensesList();
         });
     }
 
-    [filterTaxi, filterType, filterDate].forEach(filter => {
+    [filterTaxi, filterType, filterDateStart, filterDateEnd].forEach(filter => {
         if (filter) {
             filter.addEventListener('change', () => {
                 applyExpenseFilters();
             });
         }
     });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            applyExpenseFilters();
+        });
+    }
 }
 
 function applyExpenseFilters() {
     const expenses = allData.expenses || [];
     const filterTaxi = document.getElementById('filterExpenseTaxi')?.value || '';
     const filterType = document.getElementById('filterExpenseType')?.value || '';
-    const filterDate = document.getElementById('filterExpenseDate')?.value || '';
+    const filterDateStart = document.getElementById('filterExpenseDateStart')?.value || '';
+    const filterDateEnd = document.getElementById('filterExpenseDateEnd')?.value || '';
+    const searchQuery = document.getElementById('searchExpenseInput')?.value.toLowerCase() || '';
 
     let filtered = expenses;
 
+    // Filtre par taxi
     if (filterTaxi) {
         filtered = filtered.filter(e => e.matricule === filterTaxi);
     }
+    
+    // Filtre par type
     if (filterType) {
         filtered = filtered.filter(e => e.type === filterType);
     }
-    if (filterDate) {
-        filtered = filtered.filter(e => e.date === filterDate);
+    
+    // Filtre par période
+    if (filterDateStart) {
+        filtered = filtered.filter(e => e.date >= filterDateStart);
+    }
+    if (filterDateEnd) {
+        filtered = filtered.filter(e => e.date <= filterDateEnd);
+    }
+    
+    // Recherche globale
+    if (searchQuery) {
+        filtered = filtered.filter(e => {
+            const matricule = (e.matricule || '').toLowerCase();
+            const description = (e.description || '').toLowerCase();
+            const invoiceNumber = (e.invoiceNumber || '').toLowerCase();
+            return matricule.includes(searchQuery) || 
+                   description.includes(searchQuery) || 
+                   invoiceNumber.includes(searchQuery);
+        });
     }
 
     displayExpenses(filtered);
@@ -4254,6 +5344,17 @@ function initExpenseModal() {
             openExpenseModal();
         });
     }
+
+    // Boutons d'export
+    const exportCSVBtn = document.getElementById('exportExpensesCSV');
+    if (exportCSVBtn) {
+        exportCSVBtn.addEventListener('click', exportExpensesCSV);
+    }
+
+    const exportPDFBtn = document.getElementById('exportExpensesPDF');
+    if (exportPDFBtn) {
+        exportPDFBtn.addEventListener('click', exportExpensesPDF);
+    }
 }
 
 function openExpenseModal(expenseId = null) {
@@ -4263,18 +5364,73 @@ function openExpenseModal(expenseId = null) {
     
     if (!modal || !form) return;
 
+    // Gérer l'affichage conditionnel des champs selon le type
+    const expenseTypeSelect = document.getElementById('expenseType');
+    const expenseScopeGroup = document.getElementById('expenseScopeGroup');
+    const expenseMatriculeGroup = document.getElementById('expenseMatriculeGroup');
+    const expenseMatriculesGroup = document.getElementById('expenseMatriculesGroup');
+    const expenseAmountLabel = document.getElementById('expenseAmountLabel');
+    const expenseAmountHint = document.getElementById('expenseAmountHint');
+    const expenseScope = document.getElementById('expenseScope');
+
+    function updateFormFields() {
+        const type = expenseTypeSelect.value;
+        const isAssuranceOrVidange = type === 'assurance' || type === 'vidange';
+        
+        if (isAssuranceOrVidange) {
+            expenseScopeGroup.style.display = 'block';
+            const scope = expenseScope.value;
+            if (scope === 'groupe') {
+                expenseMatriculeGroup.style.display = 'none';
+                expenseMatriculesGroup.style.display = 'block';
+                document.getElementById('expenseMatricule').removeAttribute('required');
+                document.getElementById('expenseMatricules').setAttribute('required', 'required');
+                expenseAmountLabel.textContent = type === 'vidange' ? 'Montant Total (FCFA) *' : 'Montant Total (FCFA) *';
+                expenseAmountHint.style.display = 'block';
+            } else {
+                expenseMatriculeGroup.style.display = 'block';
+                expenseMatriculesGroup.style.display = 'none';
+                document.getElementById('expenseMatricule').setAttribute('required', 'required');
+                document.getElementById('expenseMatricules').removeAttribute('required');
+                expenseAmountLabel.textContent = 'Montant (FCFA) *';
+                expenseAmountHint.style.display = 'none';
+            }
+        } else {
+            expenseScopeGroup.style.display = 'none';
+            expenseMatriculeGroup.style.display = 'block';
+            expenseMatriculesGroup.style.display = 'none';
+            document.getElementById('expenseMatricule').setAttribute('required', 'required');
+            document.getElementById('expenseMatricules').removeAttribute('required');
+            expenseAmountLabel.textContent = 'Montant (FCFA) *';
+            expenseAmountHint.style.display = 'none';
+        }
+    }
+
+    expenseTypeSelect.addEventListener('change', updateFormFields);
+    if (expenseScope) {
+        expenseScope.addEventListener('change', updateFormFields);
+    }
+
     if (expenseId) {
         const expense = allData.expenses.find(e => e.id === expenseId);
         if (expense) {
             if (title) title.textContent = 'Modifier une Dépense';
             document.getElementById('expenseId').value = expense.id;
-            document.getElementById('expenseMatricule').value = expense.matricule;
             document.getElementById('expenseDate').value = expense.date;
             document.getElementById('expenseType').value = expense.type;
             document.getElementById('expenseDescription').value = expense.description || '';
             document.getElementById('expenseAmount').value = expense.amount || 0;
-            document.getElementById('expenseProvider').value = expense.provider || '';
             document.getElementById('expenseInvoiceNumber').value = expense.invoiceNumber || '';
+            
+            // Pour les dépenses de groupe, on ne peut pas vraiment les modifier facilement
+            // On affiche juste le véhicule individuel
+            if (expense.is_group_expense) {
+                document.getElementById('expenseMatricule').value = expense.matricule;
+            } else {
+                document.getElementById('expenseMatricule').value = expense.matricule;
+            }
+            
+            updateFormFields();
         }
     } else {
         if (title) title.textContent = 'Ajouter une Dépense';
@@ -4282,24 +5438,51 @@ function openExpenseModal(expenseId = null) {
         document.getElementById('expenseId').value = '';
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('expenseDate').value = today;
+        updateFormFields();
     }
 
     loadTaxisDropdown('expenseMatricule');
+    
+    // Charger aussi pour la sélection multiple
+    const matriculesSelect = document.getElementById('expenseMatricules');
+    if (matriculesSelect) {
+        const taxis = allData.taxis || [];
+        matriculesSelect.innerHTML = taxis.map(t => 
+            `<option value="${t.matricule}">${t.matricule}</option>`
+        ).join('');
+    }
+    
     modal.style.display = 'flex';
     modal.classList.add('show');
 }
 
 async function handleExpenseSubmit() {
     const id = document.getElementById('expenseId').value;
+    const type = document.getElementById('expenseType').value;
+    const scope = document.getElementById('expenseScope')?.value || 'vehicule';
+    const isAssuranceOrVidange = type === 'assurance' || type === 'vidange';
+    
     const expense = {
-        matricule: document.getElementById('expenseMatricule').value,
         date: document.getElementById('expenseDate').value,
-        type: document.getElementById('expenseType').value,
+        type: type,
         description: document.getElementById('expenseDescription').value,
         amount: document.getElementById('expenseAmount').value,
-        provider: document.getElementById('expenseProvider').value,
         invoiceNumber: document.getElementById('expenseInvoiceNumber').value
     };
+
+    if (isAssuranceOrVidange && scope === 'groupe') {
+        const matriculesSelect = document.getElementById('expenseMatricules');
+        const selectedMatricules = Array.from(matriculesSelect.selectedOptions).map(opt => opt.value);
+        if (selectedMatricules.length === 0) {
+            showToast('Veuillez sélectionner au moins un véhicule', 'error');
+            return;
+        }
+        expense.scope = 'groupe';
+        expense.matricules = selectedMatricules;
+    } else {
+        expense.matricule = document.getElementById('expenseMatricule').value;
+        expense.scope = 'vehicule';
+    }
 
     try {
         if (id) {
@@ -4332,6 +5515,594 @@ async function confirmDeleteExpense(id) {
         } catch (error) {
             console.error('Erreur confirmDeleteExpense:', error);
         }
+    }
+}
+
+function viewExpenseDetail(id) {
+    const expense = allData.expenses.find(e => e.id === id);
+    if (!expense) {
+        showToast('Dépense introuvable', 'error');
+        return;
+    }
+
+    const typeLabels = {
+        'garage': 'Garage',
+        'assurance': 'Assurance',
+        'pneu': 'Pneu',
+        'vidange': 'Vidange',
+        'carburant': 'Carburant',
+        'reparation': 'Réparation',
+        'autre': 'Autre'
+    };
+
+    const dateStr = new Date(expense.date).toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+
+    const detailHtml = `
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-slate-500 mb-1">Date</p>
+                    <p class="font-semibold text-slate-800">${dateStr}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 mb-1">Matricule</p>
+                    <p class="font-semibold text-slate-800">${expense.matricule}</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-slate-500 mb-1">Type de Dépense</p>
+                    <p class="font-semibold text-slate-800">${typeLabels[expense.type] || expense.type}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-slate-500 mb-1">Montant</p>
+                    <p class="font-bold text-lg text-brand-600">${parseFloat(expense.amount || 0).toLocaleString('fr-FR')} FCFA</p>
+                </div>
+            </div>
+            ${expense.description ? `
+            <div>
+                <p class="text-sm text-slate-500 mb-1">Description</p>
+                <p class="text-slate-800">${expense.description}</p>
+            </div>
+            ` : ''}
+            ${expense.invoiceNumber ? `
+            <div>
+                <p class="text-sm text-slate-500 mb-1">Numéro de Facture</p>
+                <p class="text-slate-800 font-mono">${expense.invoiceNumber}</p>
+            </div>
+            ` : ''}
+            ${expense.receiptUrl ? `
+            <div>
+                <p class="text-sm text-slate-500 mb-1">Reçu</p>
+                <a href="${expense.receiptUrl}" target="_blank" class="text-brand-600 hover:underline">
+                    <i class="fas fa-external-link-alt mr-1"></i>Voir le reçu
+                </a>
+            </div>
+            ` : ''}
+        </div>
+    `;
+
+    // Créer ou mettre à jour le modal de détails
+    let detailModal = document.getElementById('expenseDetailModal');
+    if (!detailModal) {
+        detailModal = document.createElement('div');
+        detailModal.id = 'expenseDetailModal';
+        detailModal.className = 'modal';
+        detailModal.innerHTML = `
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Détails de la Dépense</h2>
+                <div id="expenseDetailContent"></div>
+                <div class="form-actions mt-6">
+                    <button type="button" class="btn btn-secondary close-modal">Fermer</button>
+                    ${currentRole === 'gestionnaire' ? `
+                    <button type="button" class="btn btn-primary" onclick="editExpense(${expense.id}); document.getElementById('expenseDetailModal').style.display='none';">
+                        <i class="fas fa-edit mr-2"></i>Modifier
+                    </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(detailModal);
+        
+        // Gérer la fermeture
+        const closeBtn = detailModal.querySelector('.close');
+        const closeModalBtn = detailModal.querySelector('.close-modal');
+        const closeModal = () => {
+            detailModal.style.display = 'none';
+            detailModal.classList.remove('show');
+        };
+        if (closeBtn) closeBtn.addEventListener('click', closeModal);
+        if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+        detailModal.addEventListener('click', (e) => {
+            if (e.target === detailModal) closeModal();
+        });
+    }
+
+    document.getElementById('expenseDetailContent').innerHTML = detailHtml;
+    detailModal.style.display = 'flex';
+    detailModal.classList.add('show');
+}
+
+function drawExpenseCharts(expenses) {
+    if (!expenses || expenses.length === 0) {
+        return;
+    }
+
+    const today = new Date();
+    const currentMonth = today.getMonth();
+    const currentYear = today.getFullYear();
+
+    // Filtrer les dépenses du mois en cours
+    const monthExpenses = expenses.filter(e => {
+        const expenseDate = new Date(e.date);
+        return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+    });
+
+    // Graphique 1: Dépenses par Type (Camembert)
+    const ctxByType = document.getElementById('chartExpensesByType');
+    if (ctxByType) {
+        try {
+            if (chartExpensesByType) {
+                chartExpensesByType.destroy();
+            }
+        } catch (e) {
+            console.log('Erreur destruction chartExpensesByType:', e);
+        }
+
+        const typeData = {};
+        monthExpenses.forEach(e => {
+            const type = e.type || 'autre';
+            typeData[type] = (typeData[type] || 0) + parseFloat(e.amount || 0);
+        });
+
+        const typeLabels = {
+            'garage': 'Garage',
+            'assurance': 'Assurance',
+            'pneu': 'Pneu',
+            'vidange': 'Vidange',
+            'carburant': 'Carburant',
+            'reparation': 'Réparation',
+            'autre': 'Autre'
+        };
+
+        const labels = Object.keys(typeData).map(t => typeLabels[t] || t);
+        const data = Object.values(typeData);
+        const colors = [
+            'rgba(249, 115, 22, 0.8)', // orange - garage
+            'rgba(59, 130, 246, 0.8)',  // blue - assurance
+            'rgba(168, 85, 247, 0.8)', // purple - pneu
+            'rgba(34, 197, 94, 0.8)',  // green - vidange
+            'rgba(234, 179, 8, 0.8)',  // yellow - carburant
+            'rgba(239, 68, 68, 0.8)',  // red - reparation
+            'rgba(148, 163, 184, 0.8)' // slate - autre
+        ];
+
+        chartExpensesByType = new Chart(ctxByType, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: colors.slice(0, labels.length),
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${value.toLocaleString('fr-FR')} FCFA (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Graphique 2: Dépenses par Taxi (Barres)
+    const ctxByTaxi = document.getElementById('chartExpensesByTaxi');
+    if (ctxByTaxi) {
+        try {
+            if (chartExpensesByTaxi) {
+                chartExpensesByTaxi.destroy();
+            }
+        } catch (e) {
+            console.log('Erreur destruction chartExpensesByTaxi:', e);
+        }
+
+        const taxiData = {};
+        monthExpenses.forEach(e => {
+            const taxi = e.matricule || 'Inconnu';
+            taxiData[taxi] = (taxiData[taxi] || 0) + parseFloat(e.amount || 0);
+        });
+
+        const sortedTaxis = Object.entries(taxiData)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10); // Top 10
+
+        chartExpensesByTaxi = new Chart(ctxByTaxi, {
+            type: 'bar',
+            data: {
+                labels: sortedTaxis.map(t => t[0]),
+                datasets: [{
+                    label: 'Montant (FCFA)',
+                    data: sortedTaxis.map(t => t[1]),
+                    backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Graphique 3: Évolution sur 7 derniers jours
+    const ctxEvolution = document.getElementById('chartExpensesEvolution');
+    if (ctxEvolution) {
+        try {
+            if (chartExpensesEvolution) {
+                chartExpensesEvolution.destroy();
+            }
+        } catch (e) {
+            console.log('Erreur destruction chartExpensesEvolution:', e);
+        }
+
+        const last7Days = [];
+        const last7DaysData = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            const dayExpenses = expenses.filter(e => e.date === dateStr);
+            const total = dayExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+            last7Days.push(date.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }));
+            last7DaysData.push(total);
+        }
+
+        chartExpensesEvolution = new Chart(ctxEvolution, {
+            type: 'line',
+            data: {
+                labels: last7Days,
+                datasets: [{
+                    label: 'Dépenses (FCFA)',
+                    data: last7DaysData,
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Graphique 4: Répartition mensuelle (6 derniers mois)
+    const ctxMonthly = document.getElementById('chartExpensesMonthly');
+    if (ctxMonthly) {
+        try {
+            if (chartExpensesMonthly) {
+                chartExpensesMonthly.destroy();
+            }
+        } catch (e) {
+            console.log('Erreur destruction chartExpensesMonthly:', e);
+        }
+
+        const monthlyData = [];
+        const monthlyLabels = [];
+        for (let i = 5; i >= 0; i--) {
+            const date = new Date();
+            date.setMonth(date.getMonth() - i);
+            const month = date.getMonth();
+            const year = date.getFullYear();
+            
+            const monthExp = expenses.filter(e => {
+                const expenseDate = new Date(e.date);
+                return expenseDate.getMonth() === month && expenseDate.getFullYear() === year;
+            });
+            
+            const total = monthExp.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+            monthlyLabels.push(date.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }));
+            monthlyData.push(total);
+        }
+
+        chartExpensesMonthly = new Chart(ctxMonthly, {
+            type: 'bar',
+            data: {
+                labels: monthlyLabels,
+                datasets: [{
+                    label: 'Dépenses (FCFA)',
+                    data: monthlyData,
+                    backgroundColor: 'rgba(168, 85, 247, 0.8)',
+                    borderColor: 'rgba(168, 85, 247, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.parsed.y.toLocaleString('fr-FR') + ' FCFA';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Export des dépenses en CSV
+async function exportExpensesCSV() {
+    try {
+        const expenses = await getAllExpenses();
+        
+        if (!expenses || expenses.length === 0) {
+            showToast('Aucune dépense à exporter', 'warning');
+            return;
+        }
+
+        const typeLabels = {
+            'garage': 'Garage',
+            'assurance': 'Assurance',
+            'pneu': 'Pneu',
+            'vidange': 'Vidange',
+            'carburant': 'Carburant',
+            'reparation': 'Réparation',
+            'autre': 'Autre'
+        };
+
+        // En-têtes CSV
+        const headers = ['Date', 'Matricule', 'Type', 'Description', 'Montant (FCFA)', 'N° Facture'];
+        const rows = expenses.map(e => {
+            const date = new Date(e.date).toLocaleDateString('fr-FR');
+            return [
+                date,
+                e.matricule || '',
+                typeLabels[e.type] || e.type || '',
+                e.description || '',
+                parseFloat(e.amount || 0).toFixed(2),
+                e.invoiceNumber || ''
+            ];
+        });
+
+        // Créer le contenu CSV
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        // Ajouter BOM pour Excel
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', `depenses_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Export CSV réussi!', 'success');
+    } catch (error) {
+        console.error('Erreur exportExpensesCSV:', error);
+        showToast('Erreur lors de l\'export CSV: ' + error.message, 'error');
+    }
+}
+
+// Export des dépenses en PDF
+async function exportExpensesPDF() {
+    try {
+        const expenses = await getAllExpenses();
+        
+        if (!expenses || expenses.length === 0) {
+            showToast('Aucune dépense à exporter', 'warning');
+            return;
+        }
+
+        if (typeof window.jspdf === 'undefined') {
+            showToast('Bibliothèque jsPDF non chargée', 'error');
+            return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Titre
+        doc.setFontSize(18);
+        doc.text('Rapport des Dépenses', 14, 20);
+        
+        // Date d'export
+        doc.setFontSize(10);
+        doc.text(`Exporté le: ${new Date().toLocaleDateString('fr-FR')}`, 14, 30);
+        
+        // Statistiques globales
+        const total = expenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+        const monthExpenses = expenses.filter(e => {
+            const expenseDate = new Date(e.date);
+            return expenseDate.getMonth() === currentMonth && expenseDate.getFullYear() === currentYear;
+        });
+        const monthTotal = monthExpenses.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+        
+        doc.setFontSize(12);
+        let y = 45;
+        doc.text(`Total général: ${total.toLocaleString('fr-FR')} FCFA`, 14, y);
+        y += 7;
+        doc.text(`Total ce mois: ${monthTotal.toLocaleString('fr-FR')} FCFA`, 14, y);
+        y += 10;
+        
+        // Tableau des dépenses
+        const typeLabels = {
+            'garage': 'Garage',
+            'assurance': 'Assurance',
+            'pneu': 'Pneu',
+            'vidange': 'Vidange',
+            'carburant': 'Carburant',
+            'reparation': 'Réparation',
+            'autre': 'Autre'
+        };
+
+        // En-têtes du tableau
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text('Date', 14, y);
+        doc.text('Matricule', 40, y);
+        doc.text('Type', 65, y);
+        doc.text('Montant', 100, y);
+        doc.text('N° Facture', 130, y);
+        y += 7;
+        
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(9);
+        
+        // Trier par date décroissante
+        const sortedExpenses = [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        sortedExpenses.forEach((expense, index) => {
+            if (y > 280) {
+                doc.addPage();
+                y = 20;
+            }
+            
+            const date = new Date(expense.date).toLocaleDateString('fr-FR');
+            const matricule = (expense.matricule || '').substring(0, 8);
+            const type = (typeLabels[expense.type] || expense.type || '').substring(0, 10);
+            const amount = parseFloat(expense.amount || 0).toLocaleString('fr-FR');
+            const invoice = (expense.invoiceNumber || '').substring(0, 20);
+            
+            doc.text(date, 14, y);
+            doc.text(matricule, 40, y);
+            doc.text(type, 65, y);
+            doc.text(amount + ' FCFA', 100, y);
+            doc.text(invoice, 130, y);
+            
+            y += 6;
+        });
+        
+        // Répartition par type
+        if (y > 250) {
+            doc.addPage();
+            y = 20;
+        } else {
+            y += 10;
+        }
+        
+        doc.setFontSize(12);
+        doc.setFont(undefined, 'bold');
+        doc.text('Répartition par Type (Ce Mois)', 14, y);
+        y += 7;
+        
+        doc.setFont(undefined, 'normal');
+        doc.setFontSize(10);
+        
+        const typeStats = {};
+        monthExpenses.forEach(e => {
+            const type = e.type || 'autre';
+            typeStats[type] = (typeStats[type] || 0) + parseFloat(e.amount || 0);
+        });
+        
+        Object.entries(typeStats)
+            .sort((a, b) => b[1] - a[1])
+            .forEach(([type, amount]) => {
+                if (y > 280) {
+                    doc.addPage();
+                    y = 20;
+                }
+                doc.text(`${typeLabels[type] || type}: ${amount.toLocaleString('fr-FR')} FCFA`, 14, y);
+                y += 6;
+            });
+        
+        // Sauvegarder le PDF
+        const fileName = `depenses_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(fileName);
+        
+        showToast('Export PDF réussi!', 'success');
+    } catch (error) {
+        console.error('Erreur exportExpensesPDF:', error);
+        showToast('Erreur lors de l\'export PDF: ' + error.message, 'error');
     }
 }
 
@@ -6287,6 +8058,42 @@ document.addEventListener('DOMContentLoaded', async () => {
         initializeAppEvents();
         
         // ============================================================
+        // 🔔 INITIALISER LES NOTIFICATIONS PUSH FCM
+        // ============================================================
+        // Vérifier si l'utilisateur est déjà abonné
+        const existingToken = getCurrentFCMToken();
+        
+        if (!existingToken) {
+            // Pas encore abonné, proposer l'abonnement après un délai
+            setTimeout(async () => {
+                try {
+                    console.log('[FCM] Initialisation de l\'abonnement aux notifications...');
+                    const token = await subscribeToPushNotifications();
+                    if (token) {
+                        console.log('✅ Abonnement aux notifications réussi');
+                        // Vous pouvez envoyer ce token à votre serveur pour envoyer des notifications
+                        // Exemple: await sendTokenToServer(token);
+                    }
+                } catch (error) {
+                    console.error('❌ Erreur lors de l\'abonnement FCM:', error);
+                }
+            }, 3000); // Attendre 3 secondes pour que Firebase soit complètement chargé
+        } else {
+            // Déjà abonné, vérifier que le token est toujours valide
+            console.log('[FCM] Token existant trouvé, vérification...');
+            
+            // Réinitialiser l'écoute des messages si nécessaire
+            if (window.firebaseMessaging && window.firebaseOnMessage) {
+                window.firebaseOnMessage(window.firebaseMessaging, (payload) => {
+                    console.log('[FCM] Message reçu en foreground:', payload);
+                    handlePushNotification(payload);
+                });
+            }
+            
+            console.log('✅ Notifications push déjà activées');
+        }
+        
+        // ============================================================
         // 📥 CHARGER LES DONNÉES EN ARRIÈRE-PLAN (NON BLOQUANT)
         // Ne pas utiliser 'await' pour ne pas bloquer l'interface
         // ============================================================
@@ -6332,10 +8139,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             setupReminderSchedule(reminders.time);
         }
         
-        // Demander la permission si nécessaire
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
+        // Note: La permission pour les notifications est maintenant gérée par FCM
+        // Pas besoin de demander la permission ici, FCM le fait automatiquement
         
         // ============================================================
         // 🔄 SYNCHRONISATION AUTOMATIQUE EN MODE PWA
