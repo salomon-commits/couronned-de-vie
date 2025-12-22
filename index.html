@@ -386,6 +386,19 @@
               </div>
             </div>
 
+            <!-- Section Cartes de Recettes par Semaine -->
+            <div class="mb-8">
+              <h3 class="text-lg font-bold text-slate-800 mb-4">
+                <i class="fa-solid fa-calendar-week text-brand-600 mr-2"></i>Recettes par Semaine
+              </h3>
+              <div id="weeklyRecipeCardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="text-center py-8 text-slate-400">
+                  <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                  <p>Chargement des données...</p>
+                </div>
+              </div>
+            </div>
+
             <!-- Section Taxis sans Recette Aujourd'hui -->
             <div class="mb-8">
               <h3 class="text-lg font-bold text-slate-800 mb-4">
@@ -556,6 +569,19 @@
                     <input type="date" id="filterDate" class="flex-1 px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm focus:border-brand-500 outline-none">
                     <button id="clearFilters" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium hover:bg-slate-50 transition-colors"><i class="fa-solid fa-times mr-2"></i>Effacer</button>
                   </div>
+                </div>
+              </div>
+
+              <!-- Totaux versés par semaine (selon filtres) -->
+              <div class="p-4 border-b border-slate-100">
+                <div class="flex items-center justify-between mb-2">
+                  <h4 class="text-sm font-bold text-slate-700">
+                    <i class="fa-solid fa-calendar-week mr-2"></i>Totaux versés par semaine
+                  </h4>
+                  <span class="text-xs text-slate-400">Basé sur les filtres</span>
+                </div>
+                <div id="listWeeklyTotalsContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div class="text-slate-400 text-sm">Chargement…</div>
                 </div>
               </div>
 
@@ -1046,37 +1072,8 @@
     </div>
 
     <!-- Scripts nécessaires -->
-    <!-- Firebase SDK -->
-    <script type="module">
-      // Import the functions you need from the SDKs you need
-      import { initializeApp } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js";
-      import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/12.6.0/firebase-messaging.js";
-
-      // Your web app's Firebase configuration
-      const firebaseConfig = {
-        apiKey: "AIzaSyDXJ85EaH9uKOSwLvxLuwv1mi1XWv9Ua_0",
-        authDomain: "couronne-de-vie-aef98.firebaseapp.com",
-        projectId: "couronne-de-vie-aef98",
-        storageBucket: "couronne-de-vie-aef98.firebasestorage.app",
-        messagingSenderId: "437542193700",
-        appId: "1:437542193700:web:0f2e355ae486660c75e6b1"
-      };
-
-      // Initialize Firebase
-      const app = initializeApp(firebaseConfig);
-      
-      // Initialize Firebase Cloud Messaging and get a reference to the service
-      let messaging = null;
-      if ('serviceWorker' in navigator) {
-        messaging = getMessaging(app);
-        
-        // Expose messaging and functions to global scope for use in other scripts
-        window.firebaseMessaging = messaging;
-        window.firebaseApp = app;
-        window.firebaseGetToken = getToken;
-        window.firebaseOnMessage = onMessage;
-      }
-    </script>
+    <!-- Système de notifications natif (remplace Firebase) -->
+    <script src="notifications.js"></script>
     
     <!-- Chart.js pour les graphiques -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -1093,6 +1090,20 @@
             <span class="close">&times;</span>
             <h2 id="recipeDetailModalTitle">Détails de la Recette</h2>
             <div id="recipeDetailModalContent" class="recipe-detail-content">
+                <div class="text-center py-8 text-slate-400">
+                    <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
+                    <p>Chargement...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Détails Semaine -->
+    <div id="weeklyRecipeDetailModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close">&times;</span>
+            <h2 id="weeklyRecipeDetailModalTitle">Détails de la Semaine</h2>
+            <div id="weeklyRecipeDetailModalContent" class="recipe-detail-content">
                 <div class="text-center py-8 text-slate-400">
                     <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
                     <p>Chargement...</p>
@@ -1345,8 +1356,7 @@
     <!-- Script de compatibilité (doit être chargé avant app.js) -->
     <script src="compatibility.js"></script>
     
-    <!-- Firebase Messaging pour les notifications push -->
-    <script src="firebase-messaging-sw.js"></script>
+    <!-- Service Worker pour les notifications (géré dans service-worker.js) -->
     
     <!-- Scripts de l'application -->
     <script src="app.js"></script>

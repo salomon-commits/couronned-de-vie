@@ -172,7 +172,7 @@ class AIAssistant {
     }
 
     // Générer des recommandations intelligentes
-    generateRecommendations(recipes, taxis, drivers) {
+    generateRecommendations(recipes, taxis, drivers, unpaidDays = []) {
         const recommendations = [];
         
         if (!recipes || recipes.length === 0) {
@@ -199,7 +199,6 @@ class AIAssistant {
                 priority: 'high',
                 action: () => {
                     showPage('list-recipes');
-                    // Filtrer pour montrer seulement les déficits
                     const filterSelect = document.getElementById('statusFilter');
                     if (filterSelect) {
                         filterSelect.value = 'deficit';
@@ -219,7 +218,64 @@ class AIAssistant {
             });
         }
 
-        // Recommandations pour les taxis
+        // Retards: taxis sans recette récente ou non versement aujourd'hui
+        if (taxis && taxis.length > 0) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const limit = new Date();
+            limit.setDate(limit.getDate() - 3);
+            const limitStr = limit.toISOString().split('T')[0];
+            const stats = {};
+            recipes.forEach(r => {
+                if (!r.matricule) return;
+                if (!stats[r.matricule]) stats[r.matricule] = { lastDate: null };
+                if (!stats[r.matricule].lastDate || r.date > stats[r.matricule].lastDate) {
+                    stats[r.matricule].lastDate = r.date;
+                }
+            });
+            const todayMatricules = new Set(recipes.filter(r => r.date === todayStr).map(r => r.matricule).filter(Boolean));
+            const delayedCount = taxis
+                .map(t => t.matricule)
+                .filter(Boolean)
+                .filter(m => !stats[m] || (stats[m].lastDate && stats[m].lastDate < limitStr) || !todayMatricules.has(m))
+                .length;
+            if (delayedCount > 0) {
+                recommendations.push({
+                    type: 'warning',
+                    icon: 'triangle-exclamation',
+                    title: 'Taxis en retard',
+                    message: `${delayedCount} taxi(s) sans recette récente ou absents aujourd'hui.`,
+                    priority: 'high',
+                    action: () => {
+                        showPage('dashboard');
+                    }
+                });
+            }
+        }
+
+        // Non-versements (jours manquants)
+        if (Array.isArray(unpaidDays) && unpaidDays.length > 0) {
+            const byTaxi = {};
+            let totalAmount = 0;
+            unpaidDays.forEach(u => {
+                if (!byTaxi[u.matricule]) byTaxi[u.matricule] = { count: 0, total: 0 };
+                byTaxi[u.matricule].count += 1;
+                byTaxi[u.matricule].total += parseFloat(u.amount) || 0;
+                totalAmount += parseFloat(u.amount) || 0;
+            });
+            const taxisConcerned = Object.keys(byTaxi).length;
+            recommendations.push({
+                type: 'warning',
+                icon: 'calendar-days',
+                title: 'Jours non versés',
+                message: `${taxisConcerned} taxi(s), total ${totalAmount.toLocaleString('fr-FR')} FCFA non versés.`,
+                priority: 'high',
+                action: () => {
+                    showPage('dashboard');
+                }
+            });
+        }
+
+        // Taxis à surveiller (performance basse)
         if (taxis && taxis.length > 0) {
             const taxiStats = {};
             recipes.forEach(r => {
@@ -416,6 +472,96 @@ class AIAssistant {
             }
         }
 
+        // Retards (taxis sans recette depuis plusieurs jours ou aujourd'hui)
+        if (lowerMessage.includes('retard') || lowerMessage.includes('en retard')) {
+            const recipes = context.recipes || [];
+            const taxis = context.taxis || [];
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const limit = new Date();
+            limit.setDate(limit.getDate() - 3);
+            const limitStr = limit.toISOString().split('T')[0];
+            
+            const stats = {};
+            recipes.forEach(r => {
+                if (!r.matricule) return;
+                if (!stats[r.matricule]) {
+                    stats[r.matricule] = { lastDate: null, deficit: 0 };
+                }
+                if (!stats[r.matricule].lastDate || r.date > stats[r.matricule].lastDate) {
+                    stats[r.matricule].lastDate = r.date;
+                }
+                const diff = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
+                if (diff < 0) stats[r.matricule].deficit += Math.abs(diff);
+            });
+            
+            const todayMatricules = new Set(recipes.filter(r => r.date === todayStr).map(r => r.matricule).filter(Boolean));
+            
+            const delayed = taxis.map(t => t.matricule).filter(Boolean).map(m => {
+                const s = stats[m];
+                let reason = '';
+                let msg = '';
+                let prio = 'medium';
+                if (!s) {
+                    reason = 'no-recipes';
+                    msg = "Aucune recette enregistrée";
+                    prio = 'high';
+                } else {
+                    if (s.lastDate && s.lastDate < limitStr) {
+                        const days = Math.floor((new Date(todayStr) - new Date(s.lastDate)) / (1000*60*60*24));
+                        reason = 'no-recent';
+                        msg = `Aucune recette depuis ${days} jour(s)`;
+                        prio = days > 7 ? 'high' : 'medium';
+                    } else if (!todayMatricules.has(m)) {
+                        reason = 'no-today';
+                        msg = "Pas de recette aujourd'hui";
+                        prio = 'medium';
+                    }
+                    if (s.deficit > 50000) {
+                        msg = msg ? `${msg} | Arriérés: ${s.deficit.toLocaleString('fr-FR')} FCFA` : `Arriérés: ${s.deficit.toLocaleString('fr-FR')} FCFA`;
+                        prio = 'high';
+                    }
+                }
+                return { matricule: m, reason, msg, deficit: s?.deficit || 0, prio };
+            }).filter(d => d.reason);
+            
+            delayed.sort((a,b) => (a.prio === 'high' ? 0:1) - (b.prio === 'high' ? 0:1) || b.deficit - a.deficit);
+            
+            const head = `J'ai identifié ${delayed.length} taxi(s) en retard.`;
+            const lines = delayed.slice(0, 5).map(d => `- ${d.matricule}: ${d.msg}`).join('\n');
+            const tail = delayed.length > 5 ? `\n… et ${delayed.length - 5} autres.` : '';
+            return {
+                response: `${head}\n${lines}${tail}`,
+                suggestions: ["Voir les taxis en retard", "Ouvrir le tableau de bord", "Voir jours non versés"]
+            };
+        }
+        
+        // Jours non versés / versements manquants
+        if (lowerMessage.includes('versement') || lowerMessage.includes('non versé') || lowerMessage.includes('non-versement')) {
+            const unpaidDays = context.unpaidDays || [];
+            if (unpaidDays.length === 0) {
+                return {
+                    response: "Aucun jour non versé enregistré.",
+                    suggestions: ["Signaler un jour non versé", "Voir les taxis sans recette aujourd'hui"]
+                };
+            }
+            const byTaxi = {};
+            unpaidDays.forEach(u => {
+                if (!byTaxi[u.matricule]) byTaxi[u.matricule] = { count: 0, total: 0 };
+                byTaxi[u.matricule].count += 1;
+                byTaxi[u.matricule].total += parseFloat(u.amount) || 0;
+            });
+            const items = Object.entries(byTaxi).map(([m, s]) => ({ matricule: m, count: s.count, total: s.total }))
+                .sort((a,b) => b.total - a.total);
+            const head = `Résumé des non-versements: ${items.length} taxi(s) concernés.`;
+            const lines = items.slice(0, 5).map(i => `- ${i.matricule}: ${i.count} jour(s), ${i.total.toLocaleString('fr-FR')} FCFA`).join('\n');
+            const tail = items.length > 5 ? `\n… et ${items.length - 5} autres.` : '';
+            return {
+                response: `${head}\n${lines}${tail}`,
+                suggestions: ["Voir le résumé détaillé", "Ouvrir la section Non Versés", "Signaler un jour non versé"]
+            };
+        }
+
         if (lowerMessage.includes('déficit') || lowerMessage.includes('problème')) {
             const deficits = (context.recipes || []).filter(r => {
                 const resultat = (parseFloat(r.montantVerse) || 0) - (parseFloat(r.recetteNormale) || 0);
@@ -434,7 +580,4 @@ class AIAssistant {
         };
     }
 }
-
-// Instance globale de l'assistant IA
-const aiAssistant = new AIAssistant();
 

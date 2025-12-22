@@ -88,6 +88,7 @@ function initializeAppEvents() {
     initMissingRecipeModal();
     initExpenseModal();
     initRecipeDetailModal();
+    initWeeklyRecipeDetailModal();
     initAIAssistant();
     loadDefaultValues();
     showPage('home');
@@ -203,14 +204,39 @@ function handleLogin(code = null, directRole = null) {
 }
 
 // ============================================================
-// 🔔 GESTION DES NOTIFICATIONS PUSH FCM
+// 🔔 GESTION DES NOTIFICATIONS (SYSTÈME NATIF)
 // ============================================================
+// Les fonctions de notifications sont maintenant dans notifications.js
+// Cette fonction est conservée pour compatibilité mais utilise le nouveau système
 
 /**
- * Demande la permission pour les notifications et génère le token d'abonnement FCM
- * @returns {Promise<string|null>} Le token FCM ou null si l'abonnement échoue
+ * Demande la permission pour les notifications (système natif)
+ * @returns {Promise<boolean>} True si l'abonnement réussit
  */
 async function subscribeToPushNotifications() {
+    // Utiliser le nouveau système de notifications natif
+    if (window.requestNotificationPermission) {
+        return await window.requestNotificationPermission();
+    }
+    
+    // Fallback vers l'ancien système si le nouveau n'est pas chargé
+    try {
+        if (!('Notification' in window)) {
+            showToast('Les notifications ne sont pas supportées sur ce navigateur', 'warning');
+            return false;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            localStorage.setItem('notificationsEnabled', 'true');
+            showToast('Notifications activées avec succès', 'success');
+            return true;
+        }
+        return false;
+    } catch (error) {
+        console.error('Erreur lors de l\'abonnement aux notifications:', error);
+        return false;
+    }
     try {
         // Vérifier que le service worker est supporté
         if (!('serviceWorker' in navigator)) {
@@ -336,53 +362,48 @@ async function subscribeToPushNotifications() {
  * @param {Object} payload - Le payload de la notification
  */
 function handlePushNotification(payload) {
-    const notificationTitle = payload.notification?.title || 'Couronne de Vie';
-    const notificationBody = payload.notification?.body || 'Nouvelle notification';
+    const notificationTitle = payload.notification?.title || payload.title || 'Couronne de Vie';
+    const notificationBody = payload.notification?.body || payload.body || 'Nouvelle notification';
     
-    // Afficher une notification système
-    if ('Notification' in window && Notification.permission === 'granted') {
-        navigator.serviceWorker.ready.then((registration) => {
-            registration.showNotification(notificationTitle, {
-                body: notificationBody,
-                icon: payload.notification?.icon || '/icon-192.png',
-                badge: '/icon-192.png',
-                tag: payload.data?.tag || 'default',
-                data: payload.data || {},
-                requireInteraction: false,
-                vibrate: [200, 100, 200]
-            });
+    // Utiliser le nouveau système de notifications
+    if (window.showNotification) {
+        window.showNotification(notificationTitle, {
+            body: notificationBody,
+            icon: payload.notification?.icon || payload.icon || '/icon-192.png',
+            tag: payload.data?.tag || payload.tag || 'default',
+            data: payload.data || {}
         });
+    } else {
+        // Fallback: afficher un toast
+        showToast(notificationBody, 'info');
     }
-    
-    // Optionnel: Afficher aussi un toast dans l'application
-    showToast(notificationBody, 'info');
 }
 
 /**
  * Vérifie si l'utilisateur est déjà abonné aux notifications
- * @returns {boolean} True si un token existe
+ * @returns {boolean} True si les notifications sont activées
  */
 function isSubscribedToNotifications() {
-    const token = localStorage.getItem('fcmToken');
-    return token !== null && token.length > 0;
+    if (window.isNotificationsEnabled) {
+        return window.isNotificationsEnabled();
+    }
+    return localStorage.getItem('notificationsEnabled') === 'true';
 }
 
 /**
- * Récupère le token FCM actuel
- * @returns {string|null} Le token FCM ou null
+ * Récupère le token de notification actuel (désactivé - on utilise le système natif)
+ * @returns {string|null} null (le système natif n'utilise pas de token)
  */
 function getCurrentFCMToken() {
-    return localStorage.getItem('fcmToken');
+    // Le système natif n'utilise pas de token
+    return null;
 }
 
 // Fonction pour déconnexion
 function handleLogout() {
     if (confirm('Êtes-vous sûr de vouloir vous déconnecter ?')) {
-        // Supprimer le token FCM lors de la déconnexion
-        if (window.deleteFCMToken) {
-            window.deleteFCMToken();
-        }
-        // Supprimer aussi du localStorage
+        // Désactiver les notifications lors de la déconnexion (optionnel)
+        // Les notifications restent actives même après déconnexion pour les rappels
         localStorage.removeItem('fcmToken');
         localStorage.removeItem('fcmTokenTimestamp');
         
@@ -1593,6 +1614,7 @@ async function loadRecipesList() {
         currentRecipesList = Array.isArray(recipes) ? recipes : [];
         currentSort = { field: null, direction: 'asc' };
         displayRecipes(currentRecipesList, true);
+        updateListWeeklyTotals(currentRecipesList);
         setupSearchFilters();
         setupSorting();
         updateSortIcons();
@@ -2080,6 +2102,7 @@ function setupSearchFilters() {
 
         currentRecipesList = filtered;
         displayRecipes(filtered, true);
+        updateListWeeklyTotals(filtered);
     };
 
     searchInput.addEventListener('input', applyFilters);
@@ -2126,6 +2149,7 @@ function setupSorting() {
             const recipes = currentRecipesList.length > 0 ? currentRecipesList : await getAllRecipes();
             currentRecipesList = recipes;
             displayRecipes(recipes, true);
+            updateListWeeklyTotals(recipes);
         });
     });
 }
@@ -3364,6 +3388,9 @@ function calculateStats(recipes, taxis = []) {
     // Calculer les totaux pour les cartes du dashboard
     calculateDashboardCards(recipes);
     
+    // Afficher les cartes de recettes par semaine
+    displayWeeklyRecipeCards(recipes);
+    
     // Identifier et afficher les taxis en retard
     identifyDelayedTaxis(recipes, taxis);
     
@@ -3554,6 +3581,305 @@ function displayMonthlyStats(monthlyData) {
     
     container.innerHTML = html;
 }
+
+// Fonction pour afficher les cartes de recettes par semaine
+function displayWeeklyRecipeCards(recipes) {
+    const container = document.getElementById('weeklyRecipeCardsContainer');
+    if (!container) return;
+    
+    // Fonction pour obtenir le début de la semaine (lundi)
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const weekStart = new Date(d);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        return weekStart;
+    }
+    
+    // Grouper les recettes par semaine
+    const weeklyGroups = {};
+    
+    recipes.forEach(recipe => {
+        if (!recipe.date) return;
+        
+        const recipeDate = new Date(recipe.date);
+        const weekStart = getWeekStart(recipeDate);
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weeklyGroups[weekKey]) {
+            weeklyGroups[weekKey] = {
+                weekStart: weekStart,
+                recipes: [],
+                total: 0,
+                count: 0
+            };
+        }
+        
+        weeklyGroups[weekKey].recipes.push(recipe);
+        weeklyGroups[weekKey].total += parseFloat(recipe.montantVerse || 0);
+        weeklyGroups[weekKey].count += 1;
+    });
+    
+    // Trier par date (plus récent en premier) et prendre les 12 dernières semaines
+    const sortedWeeks = Object.entries(weeklyGroups)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 12);
+    
+    if (sortedWeeks.length === 0) {
+        container.innerHTML = '<div class="text-center py-8 text-slate-400 col-span-full">Aucune recette disponible</div>';
+        return;
+    }
+    
+    // Fonction pour formater la date de la semaine
+    const formatWeekDate = (weekStart) => {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        return `${weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+    };
+    
+    // Générer les cartes
+    const cardsHTML = sortedWeeks.map(([weekKey, weekData]) => {
+        return `
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-all cursor-pointer weekly-recipe-card" 
+                 data-week-key="${weekKey}"
+                 onclick="showWeeklyRecipeDetails('${weekKey}')">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex-1">
+                        <h4 class="font-bold text-slate-800 mb-1">${formatWeekDate(weekData.weekStart)}</h4>
+                        <p class="text-xs text-slate-500">
+                            <i class="fa-solid fa-receipt mr-1"></i>${weekData.count} recette${weekData.count > 1 ? 's' : ''}
+                        </p>
+                    </div>
+                    <div class="p-2 bg-brand-50 text-brand-600 rounded-lg">
+                        <i class="fa-solid fa-calendar-week"></i>
+                    </div>
+                </div>
+                <div class="border-t border-slate-100 pt-3">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs text-slate-500">Total versé</span>
+                        <span class="text-lg font-bold text-slate-800">${weekData.total.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                </div>
+                <div class="mt-2 pt-2 border-t border-slate-50">
+                    <p class="text-xs text-slate-400 text-center">
+                        <i class="fa-solid fa-hand-pointer mr-1"></i>Cliquer pour voir les détails
+                    </p>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = cardsHTML;
+}
+
+// Fonction pour afficher les détails d'une semaine dans un modal
+async function showWeeklyRecipeDetails(weekKey) {
+    const recipes = await getAllRecipes();
+    
+    // Fonction pour obtenir le début de la semaine (lundi)
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const weekStart = new Date(d);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        return weekStart;
+    }
+    
+    // Filtrer les recettes de cette semaine
+    const weekStart = new Date(weekKey);
+    const weekRecipes = recipes.filter(recipe => {
+        if (!recipe.date) return false;
+        const recipeDate = new Date(recipe.date);
+        const recipeWeekStart = getWeekStart(recipeDate);
+        return recipeWeekStart.getTime() === weekStart.getTime();
+    });
+    
+    // Trier par date puis par matricule
+    weekRecipes.sort((a, b) => {
+        if (a.date !== b.date) return new Date(a.date) - new Date(b.date);
+        return (a.matricule || '').localeCompare(b.matricule || '');
+    });
+    
+    // Formater la date de la semaine
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    const weekDateStr = `${weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+    
+    // Créer le contenu du modal
+    const totalVerse = weekRecipes.reduce((sum, r) => sum + (parseFloat(r.montantVerse) || 0), 0);
+    
+    const modalContent = `
+        <div class="space-y-4">
+            <div class="bg-gradient-to-r from-brand-50 to-indigo-50 rounded-lg p-4 border border-brand-200">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">
+                    <i class="fa-solid fa-calendar-week text-brand-600 mr-2"></i>Semaine du ${weekDateStr}
+                </h3>
+                <div class="grid grid-cols-2 gap-4 mt-3">
+                    <div>
+                        <p class="text-xs text-slate-500">Nombre de recettes</p>
+                        <p class="text-xl font-bold text-slate-800">${weekRecipes.length}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-500">Total versé</p>
+                        <p class="text-xl font-bold text-brand-600">${totalVerse.toLocaleString('fr-FR')} FCFA</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg border border-slate-200 max-h-96 overflow-y-auto">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 sticky top-0 border-b border-slate-200">
+                        <tr>
+                            <th class="p-3 text-left text-xs font-bold text-slate-600 uppercase">Date</th>
+                            <th class="p-3 text-left text-xs font-bold text-slate-600 uppercase">Matricule</th>
+                            <th class="p-3 text-right text-xs font-bold text-slate-600 uppercase">Montant Versé</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        ${weekRecipes.length > 0 ? weekRecipes.map(recipe => {
+                            const dateStr = new Date(recipe.date).toLocaleDateString('fr-FR', { 
+                                day: '2-digit', 
+                                month: '2-digit',
+                                year: 'numeric'
+                            });
+                            return `
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-3 text-slate-700">${dateStr}</td>
+                                    <td class="p-3 font-medium text-slate-800">${recipe.matricule || 'N/A'}</td>
+                                    <td class="p-3 text-right font-bold text-slate-800">${parseFloat(recipe.montantVerse || 0).toLocaleString('fr-FR')} FCFA</td>
+                                </tr>
+                            `;
+                        }).join('') : `
+                            <tr>
+                                <td colspan="3" class="p-8 text-center text-slate-400">Aucune recette pour cette semaine</td>
+                            </tr>
+                        `}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    
+    // Afficher dans le modal de détails de semaine
+    const modal = document.getElementById('weeklyRecipeDetailModal');
+    const modalTitle = document.getElementById('weeklyRecipeDetailModalTitle');
+    const modalContentEl = document.getElementById('weeklyRecipeDetailModalContent');
+    
+    if (modal && modalTitle && modalContentEl) {
+        modalTitle.textContent = `Détails de la Semaine - ${weekDateStr}`;
+        modalContentEl.innerHTML = modalContent;
+        modal.style.display = 'flex';
+        modal.classList.add('show');
+        
+        // Ajouter un gestionnaire de fermeture
+        const closeBtn = modal.querySelector('.close');
+        if (closeBtn) {
+            closeBtn.onclick = () => {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            };
+        }
+        
+        // Fermer en cliquant à l'extérieur
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+            }
+        };
+    } else {
+        showToast('Erreur: modal introuvable', 'error');
+    }
+}
+
+// Initialiser le modal de détails de semaine
+function initWeeklyRecipeDetailModal() {
+    const modal = document.getElementById('weeklyRecipeDetailModal');
+    if (!modal) return;
+    
+    const closeBtn = modal.querySelector('.close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        });
+    }
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+    });
+}
+
+// Exposer la fonction globalement
+window.showWeeklyRecipeDetails = showWeeklyRecipeDetails;
+
+// Met à jour les totaux hebdomadaires dans la Liste des Recettes (basés sur les filtres)
+function updateListWeeklyTotals(recipes) {
+    const container = document.getElementById('listWeeklyTotalsContainer');
+    if (!container) return;
+
+    if (!Array.isArray(recipes) || recipes.length === 0) {
+        container.innerHTML = '<div class="text-center py-4 text-slate-400 col-span-full">Aucune donnée</div>';
+        return;
+    }
+
+    function getWeekStart(date) {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const weekStart = new Date(d);
+        weekStart.setDate(diff);
+        weekStart.setHours(0, 0, 0, 0);
+        return weekStart;
+    }
+
+    const weekly = {};
+    recipes.forEach(r => {
+        if (!r || !r.date) return;
+        const d = new Date(r.date);
+        const ws = getWeekStart(d);
+        const key = ws.toISOString().split('T')[0];
+        if (!weekly[key]) weekly[key] = { weekStart: ws, total: 0, count: 0 };
+        weekly[key].total += parseFloat(r.montantVerse || 0);
+        weekly[key].count += 1;
+    });
+
+    const sortedWeeks = Object.entries(weekly)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .slice(0, 12);
+
+    const formatWeekDate = (weekStart) => {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        return `${weekStart.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+    };
+
+    const cardsHTML = sortedWeeks.map(([key, data]) => {
+        return `
+            <div class="bg-white rounded-lg border border-slate-200 p-3">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="text-xs text-slate-500">${formatWeekDate(data.weekStart)}</span>
+                    <i class="fa-solid fa-calendar-week text-brand-600"></i>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-xs text-slate-500">Total versé</span>
+                    <span class="text-base font-bold text-slate-800">${data.total.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+                <div class="text-xs text-slate-400 mt-1">${data.count} recette${data.count > 1 ? 's' : ''}</div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = cardsHTML;
+}
+
 
 // Fonction pour calculer les totaux hebdomadaires et mensuels pour les cartes du dashboard
 function calculateDashboardCards(recipes) {
@@ -8058,31 +8384,32 @@ document.addEventListener('DOMContentLoaded', async () => {
         initializeAppEvents();
         
         // ============================================================
-        // 🔔 INITIALISER LES NOTIFICATIONS PUSH FCM
+        // 🔔 INITIALISER LES NOTIFICATIONS (SYSTÈME NATIF)
         // ============================================================
-        // Vérifier si l'utilisateur est déjà abonné
-        const existingToken = getCurrentFCMToken();
-        
-        if (!existingToken) {
-            // Pas encore abonné, proposer l'abonnement après un délai
-            setTimeout(async () => {
-                try {
-                    console.log('[FCM] Initialisation de l\'abonnement aux notifications...');
-                    const token = await subscribeToPushNotifications();
-                    if (token) {
-                        console.log('✅ Abonnement aux notifications réussi');
-                        // Vous pouvez envoyer ce token à votre serveur pour envoyer des notifications
-                        // Exemple: await sendTokenToServer(token);
-                    }
-                } catch (error) {
-                    console.error('❌ Erreur lors de l\'abonnement FCM:', error);
+        // Initialiser le système de notifications natif
+        setTimeout(async () => {
+            try {
+                // Initialiser le système de notifications
+                if (window.initializeNotifications) {
+                    await window.initializeNotifications();
+                    console.log('✅ Système de notifications initialisé');
                 }
-            }, 3000); // Attendre 3 secondes pour que Firebase soit complètement chargé
-        } else {
-            // Déjà abonné, vérifier que le token est toujours valide
-            console.log('[FCM] Token existant trouvé, vérification...');
-            
-            // Réinitialiser l'écoute des messages si nécessaire
+                
+                // Note: Vous pouvez activer automatiquement les notifications ici
+                // ou laisser l'utilisateur le faire manuellement via les paramètres
+                // const isEnabled = isSubscribedToNotifications();
+                // if (!isEnabled) {
+                //     // Optionnel: demander automatiquement
+                //     // await subscribeToPushNotifications();
+                // }
+            } catch (error) {
+                console.error('❌ Erreur lors de l\'initialisation des notifications:', error);
+            }
+        }, 1000);
+        
+        // Ancien code Firebase (désactivé) - conservé pour référence
+        /*
+        if (false) { // Désactivé
             if (window.firebaseMessaging && window.firebaseOnMessage) {
                 window.firebaseOnMessage(window.firebaseMessaging, (payload) => {
                     console.log('[FCM] Message reçu en foreground:', payload);
@@ -8092,6 +8419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             console.log('✅ Notifications push déjà activées');
         }
+        */
         
         // ============================================================
         // 📥 CHARGER LES DONNÉES EN ARRIÈRE-PLAN (NON BLOQUANT)
@@ -8271,8 +8599,9 @@ async function updateAIRecommendations() {
     const recipes = await getAllRecipes();
     const taxis = await getAllTaxis();
     const drivers = await getAllDrivers();
+    const unpaidDays = allData.unpaidDays || await getUnpaidDays();
     
-    const recommendations = aiAssistant.generateRecommendations(recipes, taxis, drivers);
+    const recommendations = aiAssistant.generateRecommendations(recipes, taxis, drivers, unpaidDays);
     const container = document.getElementById('recommendationsList');
     
     if (!container) return;
@@ -8376,8 +8705,9 @@ async function sendAIMessage() {
         const recipes = await getAllRecipes();
         const taxis = await getAllTaxis();
         const drivers = await getAllDrivers();
+        const unpaidDays = allData.unpaidDays || await getUnpaidDays();
         
-        const context = { recipes, taxis, drivers };
+        const context = { recipes, taxis, drivers, unpaidDays };
         
         // Obtenir la réponse de l'IA
         const response = await aiAssistant.chat(message, context);
