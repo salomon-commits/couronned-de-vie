@@ -557,11 +557,10 @@ console.log('🔧 Configuration Supabase:', {
     CONFIGURED: !!(SUPABASE_CONFIG.URL && SUPABASE_CONFIG.ANON_KEY && SUPABASE_CONFIG.ANON_KEY.length > 50)
 });
 
-// Configuration Assistant IA - DeepSeek API
 window.DEEPSEEK_CONFIG = {
-    API_KEY: 'sk-05ba08f8591e464bb3dce3ce44f66882',
+    API_KEY: localStorage.getItem('deepseek_api_key') || '',
     BASE_URL: 'https://api.deepseek.com/v1',
-    MODEL: 'deepseek-chat' // Utiliser 'deepseek-reasoner' pour le mode pensée
+    MODEL: 'deepseek-chat'
 };
 
 // Fonction helper pour obtenir la clé API appropriée selon le rôle
@@ -1370,14 +1369,45 @@ function calculateResult() {
 async function handleAddRecipe(e) {
     e.preventDefault();
     
+    const matricule = document.getElementById('matricule')?.value?.trim();
+    const date = document.getElementById('date')?.value;
+    const recetteNormale = parseFloat(document.getElementById('recetteNormale')?.value);
+    const montantVerse = parseFloat(document.getElementById('montantVerse')?.value);
+    const chauffeur = document.getElementById('chauffeur')?.value?.trim();
+    
+    if (!matricule) {
+        showToast('Veuillez sélectionner un taxi', 'error');
+        return;
+    }
+    
+    if (!date) {
+        showToast('Veuillez sélectionner une date', 'error');
+        return;
+    }
+    
+    if (isNaN(recetteNormale) || recetteNormale < 0) {
+        showToast('La recette normale doit être un nombre positif', 'error');
+        return;
+    }
+    
+    if (isNaN(montantVerse) || montantVerse < 0) {
+        showToast('Le montant versé doit être un nombre positif', 'error');
+        return;
+    }
+    
+    if (!chauffeur) {
+        showToast('Veuillez sélectionner un chauffeur', 'error');
+        return;
+    }
+    
     const formData = {
-        matricule: document.getElementById('matricule').value,
-        date: document.getElementById('date').value,
-        recetteNormale: parseFloat(document.getElementById('recetteNormale').value),
-        montantVerse: parseFloat(document.getElementById('montantVerse').value),
-        chauffeur: document.getElementById('chauffeur').value,
+        matricule,
+        date,
+        recetteNormale,
+        montantVerse,
+        chauffeur,
         typeCourse: document.querySelector('input[name="typeCourse"]:checked')?.value || 'ville',
-        remarques: document.getElementById('remarques').value,
+        remarques: document.getElementById('remarques')?.value?.trim() || '',
         timestamp: new Date().getTime()
     };
 
@@ -1388,9 +1418,7 @@ async function handleAddRecipe(e) {
         document.getElementById('date').value = new Date().toISOString().split('T')[0];
         document.getElementById('resultBadge').style.display = 'none';
         loadDefaultValues();
-        // Rafraîchir les données depuis Supabase
         await fetchDataFromSupabase();
-        // Recharger la liste des recettes si on est sur cette page
         if (document.getElementById('list-recipes')?.classList.contains('active')) {
             await loadRecipesList();
         }
@@ -7660,7 +7688,70 @@ function registerServiceWorker() {
     }
 }
 
-// Gérer les mises à jour du Service Worker
+let currentAppVersion = '1.0.0';
+let versionCheckInterval = null;
+
+async function checkForAppUpdate() {
+    try {
+        const response = await fetch('./version.json?t=' + Date.now(), {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            return;
+        }
+        
+        const versionData = await response.json();
+        const remoteVersion = versionData.version;
+        
+        if (remoteVersion !== currentAppVersion) {
+            console.log('[Version Check] Nouvelle version détectée:', remoteVersion);
+            showUpdateNotification(remoteVersion, versionData.changelog);
+            if (versionCheckInterval) {
+                clearInterval(versionCheckInterval);
+            }
+        }
+    } catch (error) {
+        console.warn('[Version Check] Erreur lors de la vérification:', error);
+    }
+}
+
+let currentAppVersion = '1.0.0';
+let versionCheckInterval = null;
+
+async function checkForAppUpdate() {
+    try {
+        const response = await fetch('./version.json?t=' + Date.now(), {
+            cache: 'no-store',
+            headers: {
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache'
+            }
+        });
+        
+        if (!response.ok) {
+            return;
+        }
+        
+        const versionData = await response.json();
+        const remoteVersion = versionData.version;
+        
+        if (remoteVersion !== currentAppVersion) {
+            console.log('[Version Check] Nouvelle version détectée:', remoteVersion);
+            showUpdateNotification(remoteVersion, versionData.changelog);
+            if (versionCheckInterval) {
+                clearInterval(versionCheckInterval);
+            }
+        }
+    } catch (error) {
+        console.warn('[Version Check] Erreur lors de la vérification:', error);
+    }
+}
+
 function handleServiceWorkerUpdates() {
     if ('serviceWorker' in navigator) {
         let refreshing = false;
@@ -7669,39 +7760,45 @@ function handleServiceWorkerUpdates() {
             if (!refreshing) {
                 refreshing = true;
                 console.log('[Service Worker] Nouvelle version disponible, rechargement...');
-                // Optionnel: recharger automatiquement
-                // window.location.reload();
             }
         });
         
-        // Écouter les messages du service worker
         navigator.serviceWorker.addEventListener('message', (event) => {
             console.log('[Service Worker] Message reçu:', event.data);
             if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
                 showUpdateNotification();
             }
         });
+        
+        checkForAppUpdate();
+        versionCheckInterval = setInterval(checkForAppUpdate, 300000);
     }
 }
 
-// Afficher une notification de mise à jour disponible
-function showUpdateNotification() {
+function showUpdateNotification(version = null, changelog = null) {
+    const existing = document.getElementById('updateNotification');
+    if (existing) {
+        existing.remove();
+    }
+    
     const updateNotification = document.createElement('div');
     updateNotification.id = 'updateNotification';
     updateNotification.className = 'fixed bottom-4 right-4 bg-gradient-to-r from-brand-600 to-purple-600 text-white px-6 py-4 rounded-xl shadow-2xl z-50 max-w-sm animate-slideUp';
     updateNotification.innerHTML = `
         <div class="flex items-start gap-4">
             <div class="flex-shrink-0">
-                <i class="fa-solid fa-download text-2xl"></i>
+                <i class="fa-solid fa-download text-2xl animate-bounce"></i>
             </div>
             <div class="flex-1">
-                <h3 class="font-bold text-lg mb-2">Mise à jour disponible</h3>
-                <p class="text-sm mb-3">Une nouvelle version de l'application est disponible.</p>
+                <h3 class="font-bold text-lg mb-2">Nouvelle version disponible</h3>
+                ${version ? `<p class="text-xs mb-2 opacity-90">Version ${version}</p>` : ''}
+                <p class="text-sm mb-3">Une mise à jour est disponible. Actualisez pour bénéficier des dernières améliorations.</p>
+                ${changelog ? `<p class="text-xs mb-3 opacity-75 italic">${changelog}</p>` : ''}
                 <div class="flex gap-2">
                     <button onclick="reloadApp()" class="flex-1 bg-white/20 hover:bg-white/30 text-white font-medium py-2 px-4 rounded-lg transition-colors">
-                        Actualiser
+                        <i class="fa-solid fa-sync-alt mr-2"></i>Actualiser maintenant
                     </button>
-                    <button onclick="closeUpdateNotification()" class="px-4 py-2 text-white/80 hover:text-white">
+                    <button onclick="closeUpdateNotification()" class="px-4 py-2 text-white/80 hover:text-white transition-colors">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -7710,10 +7807,9 @@ function showUpdateNotification() {
     `;
     document.body.appendChild(updateNotification);
     
-    // Auto-fermeture après 10 secondes
     setTimeout(() => {
         closeUpdateNotification();
-    }, 10000);
+    }, 30000);
 }
 
 // Fonction pour recharger l'application

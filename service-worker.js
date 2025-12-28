@@ -1,6 +1,4 @@
-// Service Worker pour Couronne de Vie
-const CACHE_NAME = 'couronne-de-vie-v3'; // Version incrémentée pour forcer la mise à jour (v3: ajout dépenses, jours non versés, modal détails)
-// Ne PAS mettre en cache les fichiers JavaScript pour éviter les problèmes d'événements
+const CACHE_NAME = 'couronne-de-vie-v4';
 const urlsToCache = [
   '/',
   '/index.html',
