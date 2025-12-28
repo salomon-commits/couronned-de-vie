@@ -99,6 +99,7 @@
     <input type="radio" name="nav" id="nav-taxis" hidden>
     <input type="radio" name="nav" id="nav-drivers" hidden>
     <input type="radio" name="nav" id="nav-expenses" hidden>
+    <input type="radio" name="nav" id="nav-unpaid" hidden>
     <input type="radio" name="nav" id="nav-report" hidden>
     <input type="radio" name="nav" id="nav-ai" hidden>
     <input type="radio" name="nav" id="nav-settings" hidden>
@@ -158,6 +159,11 @@
           <div class="pt-4 pb-1 role-gestionnaire">
             <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Analyse</p>
           </div>
+
+          <label for="nav-unpaid" class="nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="unpaid-taxis">
+            <i class="fa-solid fa-exclamation-triangle w-5 text-center"></i>
+            <span class="font-medium">Taxis sans Versement</span>
+          </label>
 
           <label for="nav-report" class="nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="report">
             <i class="fa-solid fa-file-pdf w-5 text-center"></i>
@@ -246,6 +252,11 @@
           <div class="pt-4 pb-1 role-gestionnaire">
             <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Analyse</p>
           </div>
+
+          <label for="nav-unpaid" class="nav-link nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="unpaid-taxis">
+            <i class="fa-solid fa-exclamation-triangle w-5 text-center"></i>
+            <span class="font-medium">Taxis sans Versement</span>
+          </label>
 
           <label for="nav-report" class="nav-link nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="report">
             <i class="fa-solid fa-file-pdf w-5 text-center"></i>
@@ -830,6 +841,63 @@
           </div>
 
           <!-- ============================ -->
+          <!-- VIEW: UNPAID TAXIS -->
+          <!-- ============================ -->
+          <div id="view-unpaid-taxis" class="view-section">
+            <div class="mb-6">
+              <h3 class="font-bold text-lg text-slate-800 mb-4">
+                <i class="fa-solid fa-exclamation-triangle text-red-600 mr-2"></i>Taxis sans Versement
+              </h3>
+              <p class="text-sm text-slate-600 mb-4">
+                Consultez les taxis qui n'ont pas effectué de versement à une date précise et le nombre de jours sans versement.
+              </p>
+              
+              <!-- Filtres -->
+              <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">
+                      <i class="fa-solid fa-calendar mr-2"></i>Date de référence
+                    </label>
+                    <input type="date" id="unpaidDateFilter" class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                  </div>
+                  <div class="flex items-end">
+                    <button onclick="loadUnpaidTaxis()" class="w-full px-4 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 shadow-sm">
+                      <i class="fa-solid fa-search mr-2"></i>Rechercher
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Résultats -->
+              <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-xs tracking-wider">
+                      <tr>
+                        <th class="p-4">Matricule</th>
+                        <th class="p-4">Marque</th>
+                        <th class="p-4">Date de référence</th>
+                        <th class="p-4 text-center">Jours sans versement</th>
+                        <th class="p-4 text-center">Dernier versement</th>
+                        <th class="p-4 text-center role-gestionnaire">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100" id="unpaidTaxisTableBody">
+                      <tr>
+                        <td colspan="6" class="text-center py-8 text-slate-400">
+                          <i class="fa-solid fa-info-circle text-2xl mb-2 block"></i>
+                          Sélectionnez une date et cliquez sur "Rechercher"
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================ -->
           <!-- VIEW: AI ASSISTANT -->
           <!-- ============================ -->
           <div id="view-ai" class="view-section">
@@ -1253,6 +1321,44 @@
                 
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Enregistrer</button>
+                    <button type="button" class="btn btn-secondary close-modal">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Retirer Dette -->
+    <div id="removeDebtModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="removeDebtModalTitle">Retirer la Dette</h2>
+            <form id="removeDebtForm">
+                <input type="hidden" id="removeDebtTaxiId">
+                <input type="hidden" id="removeDebtMatricule">
+                <input type="hidden" id="removeDebtDate">
+                
+                <div class="form-group">
+                    <label>Matricule</label>
+                    <input type="text" id="removeDebtTaxiMatricule" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Date de référence</label>
+                    <input type="date" id="removeDebtTaxiDate" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Nombre de jours sans versement</label>
+                    <input type="number" id="removeDebtDays" readonly class="bg-slate-100">
+                </div>
+                
+                <div class="form-group">
+                    <label>Justification *</label>
+                    <textarea id="removeDebtJustification" rows="4" placeholder="Expliquez pourquoi cette dette doit être retirée (ex: panne, réparation, congé...)" required></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Confirmer le retrait</button>
                     <button type="button" class="btn btn-secondary close-modal">Annuler</button>
                 </div>
             </form>

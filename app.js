@@ -87,6 +87,7 @@ function initializeAppEvents() {
     initDriverModal();
     initMissingRecipeModal();
     initExpenseModal();
+    initRemoveDebtModal();
     initRecipeDetailModal();
     initWeeklyRecipeDetailModal();
     initAIAssistant();
@@ -1141,6 +1142,7 @@ function showPage(pageId) {
         'expenses': 'view-expenses',
         'taxis': 'view-taxis',
         'drivers': 'view-drivers',
+        'unpaid-taxis': 'view-unpaid-taxis',
         'report': 'view-report',
         'ai-assistant': 'view-ai',
         'settings': 'view-settings'
@@ -1209,6 +1211,9 @@ function showPage(pageId) {
             setTimeout(() => {
                 initTaxiModal();
             }, 200);
+            break;
+        case 'unpaid-taxis':
+            loadUnpaidTaxisPage();
             break;
         case 'drivers':
             loadDriversList();
@@ -1397,6 +1402,18 @@ async function handleAddRecipe(e) {
 
 // CRUD Recettes
 async function addRecipe(recipe) {
+    // Vérifier les doublons avant d'ajouter
+    const existingRecipe = allData.recipes.find(r => 
+        r.date === recipe.date && 
+        r.matricule === recipe.matricule
+    );
+    
+    if (existingRecipe) {
+        const errorMsg = `Une recette existe déjà pour le taxi ${recipe.matricule} le ${new Date(recipe.date).toLocaleDateString('fr-FR')}`;
+        showToast(errorMsg, 'error');
+        throw new Error(errorMsg);
+    }
+    
     // Si gestionnaire, sauvegarder dans Supabase d'abord
     if (currentRole === 'gestionnaire') {
         try {
@@ -1423,6 +1440,12 @@ async function addRecipe(recipe) {
             }
         } catch (error) {
             console.error('Erreur Supabase addRecipe:', error);
+            // Vérifier si c'est une erreur de doublon
+            if (error.message && (error.message.includes('duplicate') || error.message.includes('unique') || error.message.includes('23505'))) {
+                const errorMsg = `Une recette existe déjà pour le taxi ${recipe.matricule} le ${new Date(recipe.date).toLocaleDateString('fr-FR')}`;
+                showToast(errorMsg, 'error');
+                throw new Error(errorMsg);
+            }
             showToast('Erreur lors de l\'ajout dans Supabase: ' + error.message, 'error');
             throw error; // Propager l'erreur pour ne pas continuer
         }
@@ -2740,6 +2763,240 @@ async function loadTaxisDropdown(selectId) {
 
     if (currentValue) select.value = currentValue;
 }
+
+// Fonctions pour les taxis sans versement
+function loadUnpaidTaxisPage() {
+    // Initialiser la date à aujourd'hui par défaut
+    const dateInput = document.getElementById('unpaidDateFilter');
+    if (dateInput && !dateInput.value) {
+        dateInput.value = new Date().toISOString().split('T')[0];
+    }
+    
+    // Initialiser le modal de retrait de dette
+    initRemoveDebtModal();
+}
+
+async function loadUnpaidTaxis() {
+    const dateInput = document.getElementById('unpaidDateFilter');
+    const tbody = document.getElementById('unpaidTaxisTableBody');
+    
+    if (!dateInput || !tbody) {
+        showToast('Éléments de la page introuvables', 'error');
+        return;
+    }
+    
+    const referenceDate = dateInput.value;
+    if (!referenceDate) {
+        showToast('Veuillez sélectionner une date de référence', 'error');
+        return;
+    }
+    
+    try {
+        showToast('Calcul en cours...', 'info');
+        
+        const taxis = await getAllTaxis();
+        const recipes = await getAllRecipes();
+        const referenceDateObj = new Date(referenceDate);
+        
+        // Trouver les taxis sans versement à la date de référence
+        const unpaidTaxis = [];
+        
+        for (const taxi of taxis) {
+            // Trouver toutes les recettes pour ce taxi
+            const taxiRecipes = recipes.filter(r => r.matricule === taxi.matricule);
+            
+            // Vérifier s'il y a un versement à la date de référence
+            const hasPaymentOnDate = taxiRecipes.some(r => {
+                const recipeDate = new Date(r.date);
+                return recipeDate.toDateString() === referenceDateObj.toDateString();
+            });
+            
+            if (!hasPaymentOnDate) {
+                // Trouver le dernier versement avant la date de référence
+                const previousRecipes = taxiRecipes.filter(r => {
+                    const recipeDate = new Date(r.date);
+                    return recipeDate < referenceDateObj;
+                }).sort((a, b) => new Date(b.date) - new Date(a.date));
+                
+                const lastPaymentDate = previousRecipes.length > 0 
+                    ? new Date(previousRecipes[0].date)
+                    : null;
+                
+                // Calculer le nombre de jours sans versement
+                let daysWithoutPayment = 0;
+                if (lastPaymentDate) {
+                    const diffTime = referenceDateObj - lastPaymentDate;
+                    daysWithoutPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                } else {
+                    // Si jamais de versement, calculer depuis une date de référence (par exemple, il y a 30 jours)
+                    const defaultStartDate = new Date(referenceDateObj);
+                    defaultStartDate.setDate(defaultStartDate.getDate() - 30);
+                    const diffTime = referenceDateObj - defaultStartDate;
+                    daysWithoutPayment = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                }
+                
+                unpaidTaxis.push({
+                    taxi: taxi,
+                    referenceDate: referenceDate,
+                    daysWithoutPayment: daysWithoutPayment,
+                    lastPaymentDate: lastPaymentDate ? lastPaymentDate.toISOString().split('T')[0] : null
+                });
+            }
+        }
+        
+        // Trier par nombre de jours décroissant
+        unpaidTaxis.sort((a, b) => b.daysWithoutPayment - a.daysWithoutPayment);
+        
+        // Afficher les résultats
+        displayUnpaidTaxis(unpaidTaxis);
+        
+        if (unpaidTaxis.length === 0) {
+            showToast('Tous les taxis ont effectué un versement à cette date', 'success');
+        } else {
+            showToast(`${unpaidTaxis.length} taxi(s) sans versement trouvé(s)`, 'info');
+        }
+        
+    } catch (error) {
+        console.error('Erreur loadUnpaidTaxis:', error);
+        showToast('Erreur lors du calcul: ' + error.message, 'error');
+        if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Erreur lors du calcul</td></tr>';
+        }
+    }
+}
+
+function displayUnpaidTaxis(unpaidTaxis) {
+    const tbody = document.getElementById('unpaidTaxisTableBody');
+    if (!tbody) return;
+    
+    if (!unpaidTaxis || unpaidTaxis.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center py-8 text-slate-400">
+                    <i class="fa-solid fa-check-circle text-2xl mb-2 block text-green-500"></i>
+                    Tous les taxis ont effectué un versement à cette date
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    const isReadOnly = currentRole === 'lecteur';
+    
+    tbody.innerHTML = unpaidTaxis.map(item => {
+        const taxi = item.taxi;
+        const daysBadge = item.daysWithoutPayment > 7 
+            ? '<span class="px-2 py-1 rounded text-xs font-bold bg-red-100 text-red-800">' + item.daysWithoutPayment + ' jours</span>'
+            : item.daysWithoutPayment > 3
+            ? '<span class="px-2 py-1 rounded text-xs font-bold bg-orange-100 text-orange-800">' + item.daysWithoutPayment + ' jours</span>'
+            : '<span class="px-2 py-1 rounded text-xs font-bold bg-yellow-100 text-yellow-800">' + item.daysWithoutPayment + ' jours</span>';
+        
+        const lastPayment = item.lastPaymentDate 
+            ? new Date(item.lastPaymentDate).toLocaleDateString('fr-FR')
+            : 'Jamais';
+        
+        const actionButton = isReadOnly ? '' : `
+            <button class="px-3 py-1 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors" 
+                    onclick="openRemoveDebtModal('${taxi.id}', '${taxi.matricule}', '${item.referenceDate}', ${item.daysWithoutPayment})">
+                <i class="fa-solid fa-trash-can mr-1"></i>Retirer dette
+            </button>
+        `;
+        
+        return `
+            <tr class="hover:bg-slate-50">
+                <td class="p-4 font-medium">${taxi.matricule || 'N/A'}</td>
+                <td class="p-4">${taxi.marque || 'Non spécifié'}</td>
+                <td class="p-4">${new Date(item.referenceDate).toLocaleDateString('fr-FR')}</td>
+                <td class="p-4 text-center">${daysBadge}</td>
+                <td class="p-4 text-center text-slate-600">${lastPayment}</td>
+                <td class="p-4 text-center">${actionButton}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Fonction pour ouvrir le modal de retrait de dette
+function openRemoveDebtModal(taxiId, matricule, referenceDate, daysWithoutPayment) {
+    const modal = document.getElementById('removeDebtModal');
+    if (!modal) {
+        showToast('Modal introuvable', 'error');
+        return;
+    }
+    
+    document.getElementById('removeDebtTaxiId').value = taxiId;
+    document.getElementById('removeDebtMatricule').value = matricule;
+    document.getElementById('removeDebtTaxiMatricule').value = matricule;
+    document.getElementById('removeDebtDate').value = referenceDate;
+    document.getElementById('removeDebtTaxiDate').value = referenceDate;
+    document.getElementById('removeDebtDays').value = daysWithoutPayment;
+    document.getElementById('removeDebtJustification').value = '';
+    
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+}
+
+// Initialiser le modal de retrait de dette
+function initRemoveDebtModal() {
+    const modal = document.getElementById('removeDebtModal');
+    if (!modal) return;
+    
+    const form = document.getElementById('removeDebtForm');
+    const closeBtn = modal.querySelector('.close');
+    
+    // Fermer le modal
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        });
+    }
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+            modal.classList.remove('show');
+        }
+    });
+    
+    // Soumettre le formulaire
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const taxiId = document.getElementById('removeDebtTaxiId').value;
+            const matricule = document.getElementById('removeDebtMatricule').value;
+            const referenceDate = document.getElementById('removeDebtDate').value;
+            const justification = document.getElementById('removeDebtJustification').value;
+            
+            if (!justification.trim()) {
+                showToast('Veuillez fournir une justification', 'error');
+                return;
+            }
+            
+            try {
+                // Ici, on pourrait enregistrer la justification dans une table de dettes retirées
+                // Pour l'instant, on affiche juste un message de confirmation
+                showToast(`Dette retirée pour ${matricule} le ${new Date(referenceDate).toLocaleDateString('fr-FR')}. Justification: ${justification}`, 'success');
+                
+                // Fermer le modal
+                modal.style.display = 'none';
+                modal.classList.remove('show');
+                form.reset();
+                
+                // Recharger la liste
+                await loadUnpaidTaxis();
+                
+            } catch (error) {
+                console.error('Erreur lors du retrait de la dette:', error);
+                showToast('Erreur lors du retrait de la dette: ' + error.message, 'error');
+            }
+        });
+    }
+}
+
+// Exposer la fonction globalement
+window.loadUnpaidTaxis = loadUnpaidTaxis;
+window.openRemoveDebtModal = openRemoveDebtModal;
 
 // Modal Taxi - Initialisation améliorée
 function initTaxiModal() {
