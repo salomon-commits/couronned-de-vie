@@ -21,12 +21,6 @@
       "type": "image/png",
       "purpose": "any maskable"
     },
-    {
-      "src": "icone.png",
-      "sizes": "any",
-      "type": "image/png",
-      "purpose": "any"
-    }
   ],
   "categories": ["business", "productivity", "finance"],
   "shortcuts": [
@@ -34,7 +28,7 @@
       "name": "Tableau de bord",
       "short_name": "Dashboard",
       "description": "Voir le tableau de bord",
-      "url": "/?page=home",
+      "url": "./?page=home",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     },
     {

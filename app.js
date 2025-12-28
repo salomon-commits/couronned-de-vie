@@ -7720,38 +7720,6 @@ async function checkForAppUpdate() {
     }
 }
 
-let currentAppVersion = '1.0.0';
-let versionCheckInterval = null;
-
-async function checkForAppUpdate() {
-    try {
-        const response = await fetch('./version.json?t=' + Date.now(), {
-            cache: 'no-store',
-            headers: {
-                'Cache-Control': 'no-cache, no-store, must-revalidate',
-                'Pragma': 'no-cache'
-            }
-        });
-        
-        if (!response.ok) {
-            return;
-        }
-        
-        const versionData = await response.json();
-        const remoteVersion = versionData.version;
-        
-        if (remoteVersion !== currentAppVersion) {
-            console.log('[Version Check] Nouvelle version détectée:', remoteVersion);
-            showUpdateNotification(remoteVersion, versionData.changelog);
-            if (versionCheckInterval) {
-                clearInterval(versionCheckInterval);
-            }
-        }
-    } catch (error) {
-        console.warn('[Version Check] Erreur lors de la vérification:', error);
-    }
-}
-
 function handleServiceWorkerUpdates() {
     if ('serviceWorker' in navigator) {
         let refreshing = false;

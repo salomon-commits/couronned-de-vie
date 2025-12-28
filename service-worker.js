@@ -1,32 +1,33 @@
 const CACHE_NAME = 'couronne-de-vie-v4';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  // '/app.js', // NE PAS CACHER - doit toujours être chargé depuis le réseau
-  // '/compatibility.js', // NE PAS CACHER
-  // '/ai-assistant.js', // NE PAS CACHER
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap',
-  'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+  './',
+  './index.html',
+  './styles.css'
 ];
 
-// Installation du Service Worker
 self.addEventListener('install', (event) => {
   console.log('[Service Worker] Installation...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('[Service Worker] Mise en cache des fichiers');
-        return cache.addAll(urlsToCache.map(url => new Request(url, { cache: 'reload' })));
+        const cachePromises = urlsToCache.map(url => {
+          return fetch(new Request(url, { cache: 'reload' }))
+            .then((response) => {
+              if (response && response.status === 200) {
+                return cache.put(url, response);
+              }
+            })
+            .catch((error) => {
+              console.warn(`[Service Worker] Impossible de mettre en cache ${url}:`, error);
+            });
+        });
+        return Promise.allSettled(cachePromises);
       })
       .catch((error) => {
         console.error('[Service Worker] Erreur lors de la mise en cache:', error);
       })
   );
-  // Forcer l'activation immédiate
   self.skipWaiting();
 });
 
