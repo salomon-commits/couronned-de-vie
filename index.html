@@ -104,6 +104,7 @@
     <input type="radio" name="nav" id="nav-report" hidden>
     <input type="radio" name="nav" id="nav-ai" hidden>
     <input type="radio" name="nav" id="nav-settings" hidden>
+    <input type="radio" name="nav" id="nav-batch" hidden>
 
     <div class="flex h-screen overflow-hidden" id="mainApp" style="display: none;">
       
@@ -126,6 +127,11 @@
           <label for="nav-add" class="nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="add-recipe">
             <i class="fa-solid fa-circle-plus w-5 text-center"></i>
             <span class="font-medium">Ajouter Recette</span>
+          </label>
+
+          <label for="nav-batch" class="nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="batch-versement">
+            <i class="fa-solid fa-layer-group w-5 text-center"></i>
+            <span class="font-medium">Versement Groupé</span>
           </label>
 
           <label for="nav-list" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="list-recipes">
@@ -219,6 +225,11 @@
           <label for="nav-add" class="nav-link nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="add-recipe">
             <i class="fa-solid fa-circle-plus w-5 text-center"></i>
             <span class="font-medium">Ajouter Recette</span>
+          </label>
+
+          <label for="nav-batch" class="nav-link nav-item role-gestionnaire flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="batch-versement">
+            <i class="fa-solid fa-layer-group w-5 text-center"></i>
+            <span class="font-medium">Versement Groupé</span>
           </label>
 
           <label for="nav-list" class="nav-link nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="list-recipes">
@@ -1132,6 +1143,131 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+          <!-- ============================ -->
+          <!-- VIEW: BATCH VERSEMENT        -->
+          <!-- ============================ -->
+          <div id="view-batch" class="view-section">
+            <!-- Header -->
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h3 class="font-bold text-xl text-slate-800">
+                  <i class="fa-solid fa-layer-group text-brand-600 mr-2"></i>Versement Groupé par Date
+                </h3>
+                <p class="text-sm text-slate-500 mt-1">Saisissez les montants versés pour chaque taxi en une seule opération</p>
+              </div>
+            </div>
+
+            <!-- Étape 1 : Sélectionner la date + recette normale par défaut -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 mb-6">
+              <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                <span class="w-7 h-7 rounded-full bg-brand-600 text-white text-sm flex items-center justify-center font-bold">1</span>
+                Paramètres de la session
+              </h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-2">
+                    <i class="fa-solid fa-calendar mr-1 text-brand-500"></i>Date des versements
+                  </label>
+                  <input type="date" id="batchDate" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-2">
+                    <i class="fa-solid fa-coins mr-1 text-brand-500"></i>Recette normale par défaut (FCFA)
+                  </label>
+                  <div class="space-y-2">
+                    <div class="flex gap-2">
+                      <button type="button" class="batch-quick-btn flex-1 py-2 px-2 bg-slate-100 border border-slate-200 rounded text-sm font-medium hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-colors" data-amount="9000">9 000</button>
+                      <button type="button" class="batch-quick-btn flex-1 py-2 px-2 bg-slate-100 border border-slate-200 rounded text-sm font-medium hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-colors" data-amount="12000">12 000</button>
+                      <button type="button" class="batch-quick-btn flex-1 py-2 px-2 bg-slate-100 border border-slate-200 rounded text-sm font-medium hover:bg-brand-50 hover:border-brand-300 hover:text-brand-700 transition-colors" data-amount="15000">15 000</button>
+                    </div>
+                    <input type="number" id="batchDefaultRecette" placeholder="Ex: 12000" min="0" step="100"
+                      class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none">
+                  </div>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-wrap gap-2">
+                <button id="batchLoadTaxisBtn"
+                  class="px-5 py-2.5 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 shadow-sm transition-all hover:scale-105">
+                  <i class="fa-solid fa-table-list mr-2"></i>Charger les Taxis
+                </button>
+                <button id="batchApplyDefaultBtn" style="display:none;"
+                  class="px-5 py-2.5 bg-slate-600 text-white rounded-lg font-medium hover:bg-slate-700 shadow-sm transition-all">
+                  <i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Appliquer recette par défaut à tous
+                </button>
+              </div>
+            </div>
+
+            <!-- Étape 2 : Tableau de saisie -->
+            <div id="batchTableSection" style="display:none;">
+              <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-6">
+                <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <h4 class="font-semibold text-slate-700 flex items-center gap-2">
+                    <span class="w-7 h-7 rounded-full bg-brand-600 text-white text-sm flex items-center justify-center font-bold">2</span>
+                    Saisie des montants
+                    <span id="batchDateLabel" class="ml-2 text-brand-600 text-sm font-bold"></span>
+                  </h4>
+                  <div class="flex items-center gap-3">
+                    <span class="text-sm text-slate-500"><span id="batchFilledCount" class="font-bold text-brand-600">0</span> / <span id="batchTotalCount">0</span> saisis</span>
+                  </div>
+                </div>
+
+                <!-- Summary bar -->
+                <div class="px-4 py-3 bg-gradient-to-r from-brand-50 to-indigo-50 border-b border-slate-100 flex flex-wrap gap-4 text-sm">
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-money-bill-wave text-green-600"></i>
+                    <span class="text-slate-600">Total versé :</span>
+                    <span id="batchTotalVerse" class="font-bold text-green-600">0 FCFA</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-exclamation text-red-500"></i>
+                    <span class="text-slate-600">Total déficit :</span>
+                    <span id="batchTotalDeficit" class="font-bold text-red-600">0 FCFA</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-arrow-up text-emerald-500"></i>
+                    <span class="text-slate-600">Total surplus :</span>
+                    <span id="batchTotalSurplus" class="font-bold text-emerald-600">0 FCFA</span>
+                  </div>
+                </div>
+
+                <div id="batchTaxisContainer" class="p-4 space-y-3">
+                  <!-- Les lignes de taxis seront générées ici -->
+                </div>
+              </div>
+
+              <!-- Étape 3 : Enregistrer -->
+              <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                <h4 class="font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-full bg-brand-600 text-white text-sm flex items-center justify-center font-bold">3</span>
+                  Enregistrer les versements
+                </h4>
+                <div id="batchSummaryPreview" class="mb-4 text-sm text-slate-500 italic">Remplissez au moins un montant pour enregistrer.</div>
+                <div class="flex flex-wrap gap-3">
+                  <button id="batchSaveBtn"
+                    class="px-6 py-3 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-500/20 transition-all hover:scale-105 flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i>Enregistrer les versements saisis
+                  </button>
+                  <button id="batchResetBtn"
+                    class="px-6 py-3 bg-slate-100 text-slate-700 rounded-lg font-medium hover:bg-slate-200 transition-colors flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-left"></i>Tout effacer
+                  </button>
+                </div>
+                <!-- Progress bar during save -->
+                <div id="batchProgressContainer" class="mt-4" style="display:none;">
+                  <div class="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>Enregistrement en cours...</span>
+                    <span id="batchProgressText">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-200 rounded-full h-2">
+                    <div id="batchProgressBar" class="bg-brand-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

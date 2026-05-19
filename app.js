@@ -205,6 +205,515 @@ function handleLogin(code = null, directRole = null) {
 }
 
 // ============================================================
+// 🏦 VERSEMENT GROUPÉ PAR DATE
+// ============================================================
+
+/**
+ * Règles de recette normale par défaut :
+ *  - Suzuki (marque contient "suzuki") → 15 000
+ *  - Matricules 5585, 5224, 6215 → 10 000
+ *  - Tout le reste → 12 000
+ */
+const BATCH_SPECIAL_MATRICULES = { '5585': 10000, '5224': 10000, '6215': 10000 };
+
+function getBatchDefaultRecette(taxi, driver) {
+    // Cas spécial YACE : Recette journalière de 20 000 (c'est le matricule)
+    if (taxi.matricule && taxi.matricule.toLowerCase().includes('yace')) return 20000;
+    // Suzuki en priorité (insensible à la casse, gère 'suzuki' et 'suziki')
+    if (taxi.marque && taxi.marque.toLowerCase().includes('suz')) return 15000;
+    // Matricules spéciaux — on compare la fin/totalité du matricule
+    for (const [suffix, amount] of Object.entries(BATCH_SPECIAL_MATRICULES)) {
+        if (taxi.matricule && taxi.matricule.toString().includes(suffix)) return amount;
+    }
+    return 12000;
+}
+
+/**
+ * Initialise et affiche la page de versement groupé.
+ */
+function loadBatchVersementPage() {
+    const batchDateInput = document.getElementById('batchDate');
+    if (batchDateInput && !batchDateInput.value) {
+        batchDateInput.value = new Date().toISOString().split('T')[0];
+    }
+
+    // Boutons montant rapide pour recette par défaut globale
+    document.querySelectorAll('.batch-quick-btn').forEach(btn => {
+        const clone = btn.cloneNode(true);
+        btn.parentNode.replaceChild(clone, btn);
+        clone.addEventListener('click', () => {
+            const amount = clone.getAttribute('data-amount');
+            const input = document.getElementById('batchDefaultRecette');
+            if (input) {
+                input.value = amount;
+                document.querySelectorAll('.batch-quick-btn').forEach(b =>
+                    b.classList.remove('bg-brand-100', 'border-brand-400', 'text-brand-700'));
+                clone.classList.add('bg-brand-100', 'border-brand-400', 'text-brand-700');
+            }
+        });
+    });
+
+    const loadBtn = document.getElementById('batchLoadTaxisBtn');
+    if (loadBtn) {
+        const newBtn = loadBtn.cloneNode(true);
+        loadBtn.parentNode.replaceChild(newBtn, loadBtn);
+        newBtn.addEventListener('click', () => renderBatchTaxisTable());
+    }
+
+    const applyDefaultBtn = document.getElementById('batchApplyDefaultBtn');
+    if (applyDefaultBtn) {
+        const newBtn = applyDefaultBtn.cloneNode(true);
+        applyDefaultBtn.parentNode.replaceChild(newBtn, applyDefaultBtn);
+        newBtn.addEventListener('click', () => applyBatchDefaultRecette());
+    }
+
+    const saveBtn = document.getElementById('batchSaveBtn');
+    if (saveBtn) {
+        const newBtn = saveBtn.cloneNode(true);
+        saveBtn.parentNode.replaceChild(newBtn, saveBtn);
+        newBtn.addEventListener('click', () => saveBatchVersements());
+    }
+
+    const resetBtn = document.getElementById('batchResetBtn');
+    if (resetBtn) {
+        const newBtn = resetBtn.cloneNode(true);
+        resetBtn.parentNode.replaceChild(newBtn, resetBtn);
+        newBtn.addEventListener('click', () => resetBatchForm());
+    }
+}
+
+/**
+ * Génère le tableau des taxis avec saisie des montants.
+ * Les taxis déjà enregistrés sont verrouillés mais éditables via ✏️.
+ */
+async function renderBatchTaxisTable() {
+    const dateVal = document.getElementById('batchDate')?.value;
+    if (!dateVal) {
+        showToast('Veuillez sélectionner une date avant de charger les taxis.', 'error');
+        return;
+    }
+    const taxis = allData.taxis || [];
+    if (taxis.length === 0) {
+        showToast('Aucun taxi enregistré. Veuillez d\'abord ajouter des taxis.', 'error');
+        return;
+    }
+
+    // Recettes déjà existantes pour cette date
+    const existingMap = {};
+    (allData.recipes || []).filter(r => r.date === dateVal).forEach(r => {
+        existingMap[r.matricule] = r;
+    });
+
+    const tableSection = document.getElementById('batchTableSection');
+    const container = document.getElementById('batchTaxisContainer');
+    const dateLabel = document.getElementById('batchDateLabel');
+    const applyDefaultBtn = document.getElementById('batchApplyDefaultBtn');
+
+    if (tableSection) tableSection.style.display = 'block';
+    if (applyDefaultBtn) applyDefaultBtn.style.display = 'inline-flex';
+
+    if (dateLabel) {
+        const d = new Date(dateVal + 'T00:00:00');
+        dateLabel.textContent = '— ' + d.toLocaleDateString('fr-FR', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+    }
+
+    document.getElementById('batchTotalCount').textContent = taxis.length;
+    if (!container) return;
+    container.innerHTML = '';
+
+    taxis.forEach(taxi => {
+        const existing = existingMap[taxi.matricule];
+        const driver = (allData.drivers || []).find(d => d.taxiAssocie === taxi.matricule);
+        const alreadyExists = !!existing;
+        const autoRecette = getBatchDefaultRecette(taxi, driver);
+
+        // Badge recette auto
+        const recetteLabel = autoRecette === 20000
+            ? `<span class="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium ml-1">Yacé 20k</span>`
+            : autoRecette === 15000
+                ? `<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium ml-1">Suzuki 15k</span>`
+                : autoRecette === 10000
+                    ? `<span class="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-medium ml-1">Spécial 10k</span>`
+                    : `<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-medium ml-1">12k</span>`;
+
+        const existingBadge = alreadyExists
+            ? `<span class="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                 <i class="fa-solid fa-check-circle mr-1"></i>Enregistré (${(existing.montantVerse || 0).toLocaleString()} FCFA)
+               </span>`
+            : '';
+
+        const row = document.createElement('div');
+        row.className = 'batch-taxi-row flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border transition-all '
+            + (alreadyExists ? 'border-emerald-200 bg-emerald-50/40' : 'border-slate-200 bg-slate-50 hover:bg-white hover:border-brand-200');
+        row.dataset.matricule = taxi.matricule;
+        row.dataset.existingId = existing ? existing.id : '';
+        row.dataset.autoRecette = autoRecette;
+
+        const recetteVal = alreadyExists ? existing.recetteNormale : autoRecette;
+        const montantVal = alreadyExists ? existing.montantVerse : '';
+
+        row.innerHTML = `
+            <!-- Infos taxi -->
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="w-10 h-10 rounded-full ${alreadyExists ? 'bg-emerald-100 text-emerald-700' : 'bg-brand-100 text-brand-700'} flex items-center justify-center flex-shrink-0 text-sm">
+                    <i class="fa-solid fa-taxi"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-1 flex-wrap">
+                        <p class="font-bold text-slate-800">${taxi.matricule}</p>
+                        ${recetteLabel}
+                    </div>
+                    <p class="text-xs text-slate-500 truncate">${taxi.marque || '—'} · ${driver ? driver.nom : 'Aucun chauffeur'}</p>
+                    ${existingBadge}
+                </div>
+            </div>
+
+            <!-- Recette attendue -->
+            <div class="flex flex-col gap-1 w-full sm:w-36">
+                <label class="text-xs font-medium text-slate-500">Recette attendue (FCFA)</label>
+                <input type="number"
+                    class="batch-recette-normale px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-400 outline-none w-full"
+                    placeholder="${autoRecette}"
+                    min="0" step="100"
+                    data-matricule="${taxi.matricule}"
+                    value="${recetteVal}"
+                    ${alreadyExists ? 'disabled' : ''}>
+            </div>
+
+            <!-- Montant versé + bouton = -->
+            <div class="flex flex-col gap-1 w-full sm:w-48">
+                <label class="text-xs font-medium text-slate-500">Montant versé (FCFA)</label>
+                <div class="flex gap-1.5 items-center">
+                    <input type="number"
+                        class="batch-montant-verse px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-400 outline-none w-full font-bold text-slate-800 min-w-0"
+                        placeholder="0"
+                        min="0" step="100"
+                        data-matricule="${taxi.matricule}"
+                        value="${montantVal}"
+                        ${alreadyExists ? 'disabled' : ''}>
+                    <button type="button"
+                        class="batch-copy-btn px-2.5 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors font-bold text-sm flex-shrink-0"
+                        title="Copier la recette attendue dans montant versé"
+                        ${alreadyExists ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : ''}>=</button>
+                </div>
+            </div>
+
+            <!-- Statut + bouton modifier -->
+            <div class="flex items-center gap-2 w-full sm:flex-1 sm:justify-end mt-2 sm:mt-0">
+                <span class="batch-result-badge text-xs px-2.5 py-1.5 rounded-full font-semibold text-center whitespace-nowrap ${alreadyExists ? _batchBadgeClass(existing.montantVerse, existing.recetteNormale) : 'bg-slate-100 text-slate-400'}">
+                    ${alreadyExists ? _batchStatusText(existing.montantVerse, existing.recetteNormale) : '—'}
+                </span>
+                ${alreadyExists
+                    ? `<button type="button" class="batch-edit-btn px-2.5 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 transition-colors text-sm flex-shrink-0" title="Modifier ce versement">
+                          <i class="fa-solid fa-pen-to-square"></i>
+                       </button>
+                       <button type="button" class="batch-save-edit-btn px-2.5 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm flex-shrink-0 hidden" title="Sauvegarder la modification">
+                          <i class="fa-solid fa-floppy-disk"></i>
+                       </button>`
+                    : ''}
+            </div>
+        `;
+
+        container.appendChild(row);
+
+        // --- Listeners ---
+        const recetteInput = row.querySelector('.batch-recette-normale');
+        const montantInput = row.querySelector('.batch-montant-verse');
+        const badge = row.querySelector('.batch-result-badge');
+        const copyBtn = row.querySelector('.batch-copy-btn');
+        const editBtn = row.querySelector('.batch-edit-btn');
+        const saveEditBtn = row.querySelector('.batch-save-edit-btn');
+
+        // Bouton "=" : copie recette → montant versé
+        if (copyBtn && !alreadyExists) {
+            copyBtn.addEventListener('click', () => {
+                const recette = parseFloat(recetteInput?.value) || autoRecette;
+                if (montantInput) {
+                    montantInput.value = recette;
+                    montantInput.dispatchEvent(new Event('input'));
+                    // Feedback visuel bref
+                    copyBtn.classList.add('bg-indigo-300');
+                    setTimeout(() => copyBtn.classList.remove('bg-indigo-300'), 400);
+                }
+            });
+        }
+
+        // Bouton ✏️ : déverrouiller pour modification
+        if (editBtn) {
+            editBtn.addEventListener('click', () => {
+                // Déverrouiller les champs
+                if (recetteInput) recetteInput.disabled = false;
+                if (montantInput) montantInput.disabled = false;
+                if (copyBtn) {
+                    copyBtn.disabled = false;
+                    copyBtn.style.opacity = '1';
+                    copyBtn.style.cursor = 'pointer';
+                    copyBtn.addEventListener('click', () => {
+                        const recette = parseFloat(recetteInput?.value) || autoRecette;
+                        if (montantInput) {
+                            montantInput.value = recette;
+                            montantInput.dispatchEvent(new Event('input'));
+                        }
+                    });
+                }
+                // Changer la bordure de la ligne
+                row.classList.remove('border-emerald-200', 'bg-emerald-50/40');
+                row.classList.add('border-amber-300', 'bg-amber-50/40');
+                // Afficher bouton save, cacher bouton edit
+                editBtn.classList.add('hidden');
+                if (saveEditBtn) saveEditBtn.classList.remove('hidden');
+                showToast(`Modification activée pour ${taxi.matricule}`, 'info');
+            });
+        }
+
+        // Bouton 💾 : sauvegarder la modification
+        if (saveEditBtn) {
+            saveEditBtn.addEventListener('click', async () => {
+                const id = row.dataset.existingId;
+                if (!id) { showToast('ID introuvable pour la modification.', 'error'); return; }
+
+                const newMontant = parseFloat(montantInput?.value);
+                const newRecette = parseFloat(recetteInput?.value) || autoRecette;
+                if (isNaN(newMontant) || newMontant < 0) {
+                    showToast('Montant invalide.', 'error'); return;
+                }
+
+                saveEditBtn.disabled = true;
+                saveEditBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+                try {
+                    const existingFull = allData.recipes.find(r => r.id == id) || existing;
+                    await updateRecipe(parseInt(id), {
+                        ...existingFull,
+                        recetteNormale: newRecette,
+                        montantVerse: newMontant
+                    });
+
+                    // Mettre à jour visuellement
+                    row.classList.remove('border-amber-300', 'bg-amber-50/40');
+                    row.classList.add('border-emerald-200', 'bg-emerald-50/40');
+                    if (recetteInput) recetteInput.disabled = true;
+                    if (montantInput) montantInput.disabled = true;
+                    if (copyBtn) { copyBtn.disabled = true; copyBtn.style.opacity = '0.4'; }
+
+                    saveEditBtn.classList.add('hidden');
+                    if (editBtn) editBtn.classList.remove('hidden');
+                    saveEditBtn.disabled = false;
+                    saveEditBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+
+                    // Mettre à jour le badge
+                    badge.textContent = _batchStatusText(newMontant, newRecette);
+                    badge.className = 'batch-result-badge text-xs px-2.5 py-1.5 rounded-full font-semibold text-center whitespace-nowrap ' + _batchBadgeClass(newMontant, newRecette);
+
+                    // Mettre à jour le badge "Enregistré"
+                    const infoDiv = row.querySelector('.text-xs.bg-amber-100');
+                    if (infoDiv) infoDiv.outerHTML = `<span class="text-xs bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
+                         <i class="fa-solid fa-check-circle mr-1"></i>Enregistré (${newMontant.toLocaleString()} FCFA)
+                       </span>`;
+
+                    showToast(`✅ ${taxi.matricule} mis à jour !`, 'success');
+                    updateBatchSummary();
+                } catch (err) {
+                    saveEditBtn.disabled = false;
+                    saveEditBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+                    showToast('Erreur lors de la modification: ' + err.message, 'error');
+                }
+            });
+        }
+
+        // Calcul en temps réel du badge
+        const updateBadge = () => {
+            const recette = parseFloat(recetteInput?.value) || 0;
+            const montant = parseFloat(montantInput?.value) || 0;
+            if (!recette && !montant) {
+                badge.className = 'batch-result-badge text-xs px-2.5 py-1.5 rounded-full font-semibold text-center whitespace-nowrap bg-slate-100 text-slate-400';
+                badge.textContent = '—';
+            } else {
+                badge.textContent = _batchStatusText(montant, recette);
+                badge.className = 'batch-result-badge text-xs px-2.5 py-1.5 rounded-full font-semibold text-center whitespace-nowrap ' + _batchBadgeClass(montant, recette);
+            }
+            updateBatchSummary();
+        };
+
+        if (recetteInput) recetteInput.addEventListener('input', updateBadge);
+        if (montantInput) montantInput.addEventListener('input', updateBadge);
+    });
+
+    updateBatchSummary();
+    const already = Object.keys(existingMap).length;
+    showToast(`${taxis.length} taxi(s) chargé(s) · ${already} déjà enregistré(s)`, 'success');
+}
+
+/** Classes CSS du badge selon statut */
+function _batchBadgeClass(montant, recette) {
+    const diff = montant - recette;
+    if (diff < 0) return 'bg-red-100 text-red-700';
+    if (diff === 0) return 'bg-green-100 text-green-700';
+    return 'bg-emerald-100 text-emerald-700';
+}
+
+/** Texte du badge de statut */
+function _batchStatusText(montant, recette) {
+    const diff = montant - recette;
+    if (diff < 0) return `Déf. ${Math.abs(diff).toLocaleString()}`;
+    if (diff === 0) return `✓ Correct`;
+    return `Surp. +${diff.toLocaleString()}`;
+}
+
+/**
+ * Applique la recette intelligente (par taxi) OU la valeur globale saisie.
+ * Si une valeur globale est saisie → elle prime. Sinon → règles auto.
+ */
+function applyBatchDefaultRecette() {
+    const globalVal = parseFloat(document.getElementById('batchDefaultRecette')?.value);
+
+    document.querySelectorAll('.batch-taxi-row').forEach(row => {
+        const recetteInput = row.querySelector('.batch-recette-normale:not([disabled])');
+        if (!recetteInput || recetteInput.value) return; // Ne pas écraser si déjà saisi
+
+        const autoRecette = parseFloat(row.dataset.autoRecette) || 12000;
+        recetteInput.value = globalVal > 0 ? globalVal : autoRecette;
+        recetteInput.dispatchEvent(new Event('input'));
+    });
+
+    showToast('Recettes appliquées selon les règles de chaque taxi.', 'success');
+}
+
+/** Met à jour compteurs et totaux en temps réel */
+function updateBatchSummary() {
+    let filled = 0, totalVerse = 0, totalDeficit = 0, totalSurplus = 0;
+
+    document.querySelectorAll('.batch-taxi-row').forEach(row => {
+        const recetteInput = row.querySelector('.batch-recette-normale');
+        const montantInput = row.querySelector('.batch-montant-verse');
+        if (!montantInput) return;
+
+        const montant = parseFloat(montantInput.value) || 0;
+        const recette = parseFloat(recetteInput?.value) || 0;
+
+        if (montant > 0) {
+            filled++;
+            totalVerse += montant;
+            const diff = montant - recette;
+            if (diff < 0) totalDeficit += Math.abs(diff);
+            else if (diff > 0) totalSurplus += diff;
+        }
+    });
+
+    const el = id => document.getElementById(id);
+    if (el('batchFilledCount')) el('batchFilledCount').textContent = filled;
+    if (el('batchTotalVerse')) el('batchTotalVerse').textContent = totalVerse.toLocaleString() + ' FCFA';
+    if (el('batchTotalDeficit')) el('batchTotalDeficit').textContent = totalDeficit.toLocaleString() + ' FCFA';
+    if (el('batchTotalSurplus')) el('batchTotalSurplus').textContent = totalSurplus.toLocaleString() + ' FCFA';
+
+    const preview = el('batchSummaryPreview');
+    if (preview) {
+        preview.innerHTML = filled === 0
+            ? 'Remplissez au moins un montant pour enregistrer.'
+            : `<span class="font-semibold text-slate-700">${filled} versement(s)</span> à enregistrer · Total : <span class="font-bold text-green-600">${totalVerse.toLocaleString()} FCFA</span>`;
+    }
+}
+
+/** Remet à zéro les champs non-disabled */
+function resetBatchForm() {
+    document.querySelectorAll('.batch-recette-normale:not([disabled]), .batch-montant-verse:not([disabled])').forEach(input => {
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+    });
+    showToast('Formulaire réinitialisé.', 'info');
+}
+
+/** Enregistre tous les nouveaux versements (ignore les lignes vides et déjà-saved) */
+async function saveBatchVersements() {
+    const dateVal = document.getElementById('batchDate')?.value;
+    if (!dateVal) { showToast('Date manquante.', 'error'); return; }
+
+    const toSave = [];
+    document.querySelectorAll('.batch-taxi-row').forEach(row => {
+        const matricule = row.dataset.matricule;
+        const recetteInput = row.querySelector('.batch-recette-normale');
+        const montantInput = row.querySelector('.batch-montant-verse');
+
+        // Ignorer si déjà enregistré (disabled) et pas en mode édition
+        if (!montantInput || montantInput.disabled) return;
+
+        const montant = parseFloat(montantInput.value);
+        if (!montant || montant <= 0) return;
+
+        const recette = parseFloat(recetteInput?.value) || parseFloat(row.dataset.autoRecette) || 12000;
+        const driver = (allData.drivers || []).find(d => d.taxiAssocie === matricule);
+        toSave.push({
+            matricule, date: dateVal,
+            recetteNormale: recette,
+            montantVerse: montant,
+            chauffeur: driver ? driver.nom : '',
+            typeCourse: 'ville',
+            remarques: '',
+            timestamp: new Date().getTime()
+        });
+    });
+
+    if (toSave.length === 0) {
+        showToast('Aucun montant saisi. Remplissez au moins un versement.', 'error'); return;
+    }
+
+    const dateStr = new Date(dateVal + 'T00:00:00').toLocaleDateString('fr-FR', {
+        weekday: 'long', day: 'numeric', month: 'long'
+    });
+    if (!confirm(`Enregistrer ${toSave.length} versement(s) pour le ${dateStr} ?`)) return;
+
+    const progressContainer = document.getElementById('batchProgressContainer');
+    const progressBar = document.getElementById('batchProgressBar');
+    const progressText = document.getElementById('batchProgressText');
+    const saveBtn = document.getElementById('batchSaveBtn');
+
+    if (progressContainer) progressContainer.style.display = 'block';
+    if (saveBtn) saveBtn.disabled = true;
+
+    let success = 0, errors = 0;
+
+    for (let i = 0; i < toSave.length; i++) {
+        const pct = Math.round((i / toSave.length) * 100);
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (progressText) progressText.textContent = pct + '%';
+        try {
+            await addRecipe(toSave[i]);
+            success++;
+        } catch (err) {
+            errors++;
+            console.warn('Batch erreur', toSave[i].matricule, err.message);
+        }
+    }
+
+    if (progressBar) progressBar.style.width = '100%';
+    if (progressText) progressText.textContent = '100%';
+    if (saveBtn) saveBtn.disabled = false;
+
+    if (errors === 0) {
+        showToast(`✅ ${success} versement(s) enregistré(s) !`, 'success');
+    } else if (success > 0) {
+        showToast(`⚠️ ${success} ok, ${errors} ignoré(s) (doublons).`, 'warning');
+    } else {
+        showToast(`❌ Aucun versement enregistré (doublons détectés).`, 'error');
+    }
+
+    setTimeout(async () => {
+        if (progressContainer) progressContainer.style.display = 'none';
+        if (progressBar) progressBar.style.width = '0%';
+        await renderBatchTaxisTable();
+    }, 1500);
+}
+
+// Exposer globalement
+window.loadBatchVersementPage = loadBatchVersementPage;
+window.renderBatchTaxisTable = renderBatchTaxisTable;
+window.saveBatchVersements = saveBatchVersements;
+window.resetBatchForm = resetBatchForm;
+window.applyBatchDefaultRecette = applyBatchDefaultRecette;
+
+// ============================================================
 // 🔔 GESTION DES NOTIFICATIONS (SYSTÈME NATIF)
 // ============================================================
 // Les fonctions de notifications sont maintenant dans notifications.js
@@ -1125,7 +1634,7 @@ function initNavigation() {
 
 function showPage(pageId) {
     // Vérifier si la page est accessible selon le rôle
-    if (currentRole === 'lecteur' && (pageId === 'add-recipe' || pageId === 'taxis' || pageId === 'drivers' || pageId === 'settings')) {
+    if (currentRole === 'lecteur' && (pageId === 'add-recipe' || pageId === 'taxis' || pageId === 'drivers' || pageId === 'settings' || pageId === 'batch-versement')) {
         showToast('Accès refusé - Mode lecture seule', 'error');
         return;
     }
@@ -1144,7 +1653,8 @@ function showPage(pageId) {
         'unpaid-taxis': 'view-unpaid-taxis',
         'report': 'view-report',
         'ai-assistant': 'view-ai',
-        'settings': 'view-settings'
+        'settings': 'view-settings',
+        'batch-versement': 'view-batch'
     };
     
     // Obtenir l'ID réel de la section
@@ -1222,6 +1732,9 @@ function showPage(pageId) {
             break;
         case 'settings':
             loadSettings();
+            break;
+        case 'batch-versement':
+            loadBatchVersementPage();
             break;
     }
     
@@ -1430,6 +1943,45 @@ async function handleAddRecipe(e) {
 
 // CRUD Recettes
 async function addRecipe(recipe) {
+    // --------------------------------------------------------
+    // CAS SPÉCIAL YACÉ : 120 000 FCFA = 6 Jours x 20 000 FCFA
+    // --------------------------------------------------------
+    if (recipe.matricule && recipe.matricule.toLowerCase().includes('yace') && parseFloat(recipe.montantVerse) === 120000 && !recipe._isSplit) {
+        // Trouver le lundi de la semaine correspondant à la date choisie
+        const d = new Date(recipe.date);
+        const day = d.getDay(); // 0 = Dimanche, 1 = Lundi
+        const diffToMonday = day === 0 ? -6 : 1 - day;
+        const monday = new Date(d);
+        monday.setDate(d.getDate() + diffToMonday);
+        
+        let lastId = null;
+        for (let i = 0; i < 6; i++) { // Du Lundi (0) au Samedi (5)
+            const currentDate = new Date(monday);
+            currentDate.setDate(monday.getDate() + i);
+            
+            const splitRecipe = {
+                ...recipe,
+                date: currentDate.toISOString().split('T')[0],
+                recetteNormale: 20000,
+                montantVerse: 20000,
+                _isSplit: true // Pour éviter la boucle infinie
+            };
+            
+            try {
+                lastId = await addRecipe(splitRecipe);
+            } catch (err) {
+                // Si l'un des jours existe déjà, on continue sans tout bloquer
+                if (!err.message.includes('existe déjà')) {
+                    throw err;
+                } else {
+                    console.warn(`Versement Yacé ignoré pour le ${splitRecipe.date} (déjà existant)`);
+                }
+            }
+        }
+        return lastId; // On retourne l'ID du dernier jour ajouté
+    }
+    // --------------------------------------------------------
+
     // Vérifier les doublons avant d'ajouter
     const existingRecipe = allData.recipes.find(r => 
         r.date === recipe.date && 
