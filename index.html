@@ -47,6 +47,20 @@
           }
         }
       }
+    <!-- OneSignal Push Notifications -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+    <script>
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      OneSignalDeferred.push(async function(OneSignal) {
+        await OneSignal.init({
+          appId: "332d38c3-13c0-47b3-becf-889a1d589d24",
+          safari_web_id: "web.onesignal.auto.2460cc6e-4b7f-44ed-bf33-fcc5c16bd2af",
+          notifyButton: {
+            enable: true,
+          },
+          serviceWorkerPath: "service-worker.js"
+        });
+      });
     </script>
   </head>
   <body class="bg-gray-100 text-slate-800">
@@ -419,6 +433,16 @@
                   <i class="fa-solid fa-spinner fa-spin text-3xl mb-2"></i>
                   <p>Chargement des données...</p>
                 </div>
+              </div>
+            </div>
+
+            <!-- Section Alertes Documents -->
+            <div id="documentAlertsSection" class="mb-8" style="display: none;">
+              <h3 class="text-lg font-bold text-slate-800 mb-4">
+                <i class="fa-solid fa-bell text-indigo-600 mr-2 animate-bounce"></i>Alertes de Validité Documents
+              </h3>
+              <div id="documentAlertsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 md:mb-6">
+                <!-- Les alertes seront insérées ici dynamiquement -->
               </div>
             </div>
 
@@ -839,6 +863,7 @@
                       <th class="p-4">Matricule</th>
                       <th class="p-4">Marque et Modèle</th>
                       <th class="p-4">Propriétaire</th>
+                      <th class="p-4 text-center">Documents</th>
                       <th class="p-4 text-center role-gestionnaire">Actions</th>
                     </tr>
                   </thead>
@@ -1360,6 +1385,9 @@
                         <option value="assurance">Assurance</option>
                         <option value="pneu">Pneu</option>
                         <option value="vidange">Vidange</option>
+                        <option value="carte_stationnement">Carte de stationnement</option>
+                        <option value="patente">Patente</option>
+                        <option value="visite_technique">Visite technique</option>
                         <option value="carburant">Carburant</option>
                         <option value="reparation">Réparation</option>
                         <option value="autre">Autre</option>
@@ -1384,9 +1412,14 @@
                     </select>
                     <small style="color: #666; font-size: 0.85rem;">Maintenez Ctrl (ou Cmd sur Mac) pour sélectionner plusieurs véhicules</small>
                 </div>
-                <div class="form-group">
+                 <div class="form-group">
                     <label>Date *</label>
                     <input type="date" id="expenseDate" required>
+                </div>
+                <div class="form-group" id="expenseExpirationGroup" style="display: none;">
+                    <label id="expenseExpirationLabel">Date d'expiration / validité</label>
+                    <input type="date" id="expenseExpirationDate">
+                    <small style="color: #4f46e5; font-size: 0.85rem;">Si définie, le système vous notifiera avant cette date.</small>
                 </div>
                 <div class="form-group">
                     <label>Description</label>

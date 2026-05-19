@@ -1077,6 +1077,12 @@ function getSupabaseApiKey() {
     return SUPABASE_CONFIG.ANON_KEY;
 }
 
+// Fonction pour formater la description des dépenses (nettoyer le tag d'expiration)
+function formatExpenseDescription(desc) {
+    if (!desc) return '';
+    return desc.replace(/^\[EXPIRATION:\d{4}-\d{2}-\d{2}\]\s*/, '');
+}
+
 // Fonction helper pour faire des requêtes Supabase avec gestion d'erreur complète
 async function supabaseRequest(endpoint, options = {}) {
     const { method = 'GET', body = null, headers = {}, timeoutMs = 8000 } = options; // Timeout par défaut de 8 secondes
@@ -3311,7 +3317,8 @@ function displayTaxis(taxis) {
                 <td>${(taxi.matricule || '').toString()}</td>
                 <td>${(taxi.marque || 'Non spécifié').toString()}</td>
                 <td>${(taxi.proprietaire || '').toString()}</td>
-                <td>
+                <td class="text-center">${renderTaxiDocumentsBadges(taxi.matricule)}</td>
+                <td class="text-center">
                     ${taxiActions}
                 </td>
             </tr>
@@ -4164,6 +4171,7 @@ async function loadDashboardData() {
         const taxis = await getAllTaxis();
         calculateStats(recipes, taxis);
         renderQuickActionCards();
+        displayDocumentAlerts(taxis);
     } catch (error) {
         console.error('Erreur lors du chargement des données du dashboard:', error);
     }
@@ -5707,6 +5715,9 @@ function displayExpenses(expenses) {
         'assurance': 'Assurance',
         'pneu': 'Pneu',
         'vidange': 'Vidange',
+        'carte_stationnement': 'Carte de stationnement',
+        'patente': 'Patente',
+        'visite_technique': 'Visite technique',
         'carburant': 'Carburant',
         'reparation': 'Réparation',
         'autre': 'Autre'
@@ -5717,6 +5728,9 @@ function displayExpenses(expenses) {
         'assurance': 'bg-blue-100 text-blue-700 border-blue-300',
         'pneu': 'bg-purple-100 text-purple-700 border-purple-300',
         'vidange': 'bg-green-100 text-green-700 border-green-300',
+        'carte_stationnement': 'bg-indigo-100 text-indigo-700 border-indigo-300',
+        'patente': 'bg-cyan-100 text-cyan-700 border-cyan-300',
+        'visite_technique': 'bg-teal-100 text-teal-700 border-teal-300',
         'carburant': 'bg-yellow-100 text-yellow-700 border-yellow-300',
         'reparation': 'bg-red-100 text-red-700 border-red-300',
         'autre': 'bg-slate-100 text-slate-700 border-slate-300'
@@ -5891,7 +5905,7 @@ function displayExpenses(expenses) {
                             <span class="recipe-amount-label">
                                 <i class="fas fa-file-alt"></i> Description
                             </span>
-                            <span class="recipe-amount-value text-sm text-slate-600">${expense.description}</span>
+                            <span class="recipe-amount-value text-sm text-slate-600">${formatExpenseDescription(expense.description)}</span>
                         </div>
                         ` : ''}
                         ${expense.invoiceNumber ? `
@@ -6121,6 +6135,9 @@ function showWeekExpensesDetails(weekKey, index) {
         'assurance': 'Assurance',
         'pneu': 'Pneu',
         'vidange': 'Vidange',
+        'carte_stationnement': 'Carte de stationnement',
+        'patente': 'Patente',
+        'visite_technique': 'Visite technique',
         'carburant': 'Carburant',
         'reparation': 'Réparation',
         'autre': 'Autre'
@@ -6163,6 +6180,9 @@ function showWeekExpensesDetails(weekKey, index) {
             'assurance': { icon: 'fa-shield-halved', class: 'expense-type-blue' },
             'pneu': { icon: 'fa-circle', class: 'expense-type-gray' },
             'vidange': { icon: 'fa-oil-can', class: 'expense-type-yellow' },
+            'carte_stationnement': { icon: 'fa-square-parking', class: 'expense-type-blue' },
+            'patente': { icon: 'fa-file-invoice-dollar', class: 'expense-type-purple' },
+            'visite_technique': { icon: 'fa-wrench', class: 'expense-type-orange' },
             'carburant': { icon: 'fa-gas-pump', class: 'expense-type-green' },
             'reparation': { icon: 'fa-tools', class: 'expense-type-red' },
             'autre': { icon: 'fa-ellipsis', class: 'expense-type-purple' }
@@ -6173,6 +6193,7 @@ function showWeekExpensesDetails(weekKey, index) {
     // Fonction pour formater la description (gérer les groupes)
     const formatDescription = (description) => {
         if (!description) return 'Sans description';
+        description = formatExpenseDescription(description);
         
         // Si c'est une description de groupe, la rendre plus compacte
         if (description.includes('[GROUPE:')) {
@@ -6538,17 +6559,28 @@ function openExpenseModal(expenseId = null) {
 
     function updateFormFields() {
         const type = expenseTypeSelect.value;
-        const isAssuranceOrVidange = type === 'assurance' || type === 'vidange';
+        const isTrackingType = ['assurance', 'vidange', 'carte_stationnement', 'patente', 'visite_technique'].includes(type);
         
-        if (isAssuranceOrVidange) {
+        // Gérer le champ d'expiration
+        const expirationGroup = document.getElementById('expenseExpirationGroup');
+        if (expirationGroup) {
+            expirationGroup.style.display = isTrackingType ? 'block' : 'none';
+            const expLabel = document.getElementById('expenseExpirationLabel');
+            if (expLabel) {
+                if (type === 'vidange') expLabel.textContent = "Date de prochaine vidange";
+                else expLabel.textContent = "Date de péremption / validité";
+            }
+        }
+        
+        if (isTrackingType) {
             expenseScopeGroup.style.display = 'block';
-            const scope = expenseScope.value;
+            const scope = expenseScope ? expenseScope.value : 'vehicule';
             if (scope === 'groupe') {
                 expenseMatriculeGroup.style.display = 'none';
                 expenseMatriculesGroup.style.display = 'block';
                 document.getElementById('expenseMatricule').removeAttribute('required');
                 document.getElementById('expenseMatricules').setAttribute('required', 'required');
-                expenseAmountLabel.textContent = type === 'vidange' ? 'Montant Total (FCFA) *' : 'Montant Total (FCFA) *';
+                expenseAmountLabel.textContent = 'Montant Total (FCFA) *';
                 expenseAmountHint.style.display = 'block';
             } else {
                 expenseMatriculeGroup.style.display = 'block';
@@ -6581,7 +6613,15 @@ function openExpenseModal(expenseId = null) {
             document.getElementById('expenseId').value = expense.id;
             document.getElementById('expenseDate').value = expense.date;
             document.getElementById('expenseType').value = expense.type;
-            document.getElementById('expenseDescription').value = expense.description || '';
+            // Check for [EXPIRATION:YYYY-MM-DD] in description
+            const match = (expense.description || '').match(/\[EXPIRATION:(\d{4}-\d{2}-\d{2})\]/);
+            if (match) {
+                document.getElementById('expenseExpirationDate').value = match[1];
+                document.getElementById('expenseDescription').value = (expense.description || '').replace(/^\[EXPIRATION:\d{4}-\d{2}-\d{2}\]\s*/, '');
+            } else {
+                document.getElementById('expenseExpirationDate').value = '';
+                document.getElementById('expenseDescription').value = expense.description || '';
+            }
             document.getElementById('expenseAmount').value = expense.amount || 0;
             document.getElementById('expenseInvoiceNumber').value = expense.invoiceNumber || '';
             
@@ -6599,6 +6639,7 @@ function openExpenseModal(expenseId = null) {
         if (title) title.textContent = 'Ajouter une Dépense';
         form.reset();
         document.getElementById('expenseId').value = '';
+        document.getElementById('expenseExpirationDate').value = '';
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('expenseDate').value = today;
         updateFormFields();
@@ -6623,17 +6664,23 @@ async function handleExpenseSubmit() {
     const id = document.getElementById('expenseId').value;
     const type = document.getElementById('expenseType').value;
     const scope = document.getElementById('expenseScope')?.value || 'vehicule';
-    const isAssuranceOrVidange = type === 'assurance' || type === 'vidange';
+    const isTrackingType = ['assurance', 'vidange', 'carte_stationnement', 'patente', 'visite_technique'].includes(type);
     
+    // Manage Expiration tag in description
+    const rawDescription = document.getElementById('expenseDescription').value || '';
+    const descriptionClean = rawDescription.replace(/^\[EXPIRATION:\d{4}-\d{2}-\d{2}\]\s*/, '');
+    const expirationDate = document.getElementById('expenseExpirationDate')?.value || '';
+    const description = expirationDate ? `[EXPIRATION:${expirationDate}] ${descriptionClean}`.trim() : descriptionClean;
+
     const expense = {
         date: document.getElementById('expenseDate').value,
         type: type,
-        description: document.getElementById('expenseDescription').value,
+        description: description,
         amount: document.getElementById('expenseAmount').value,
         invoiceNumber: document.getElementById('expenseInvoiceNumber').value
     };
 
-    if (isAssuranceOrVidange && scope === 'groupe') {
+    if (isTrackingType && scope === 'groupe') {
         const matriculesSelect = document.getElementById('expenseMatricules');
         const selectedMatricules = Array.from(matriculesSelect.selectedOptions).map(opt => opt.value);
         if (selectedMatricules.length === 0) {
@@ -6693,6 +6740,9 @@ function viewExpenseDetail(id) {
         'assurance': 'Assurance',
         'pneu': 'Pneu',
         'vidange': 'Vidange',
+        'carte_stationnement': 'Carte de stationnement',
+        'patente': 'Patente',
+        'visite_technique': 'Visite technique',
         'carburant': 'Carburant',
         'reparation': 'Réparation',
         'autre': 'Autre'
@@ -6730,7 +6780,7 @@ function viewExpenseDetail(id) {
             ${expense.description ? `
             <div>
                 <p class="text-sm text-slate-500 mb-1">Description</p>
-                <p class="text-slate-800">${expense.description}</p>
+                <p class="text-slate-800">${formatExpenseDescription(expense.description)}</p>
             </div>
             ` : ''}
             ${expense.invoiceNumber ? `
@@ -6829,6 +6879,9 @@ function drawExpenseCharts(expenses) {
             'assurance': 'Assurance',
             'pneu': 'Pneu',
             'vidange': 'Vidange',
+            'carte_stationnement': 'Carte de stationnement',
+            'patente': 'Patente',
+            'visite_technique': 'Visite technique',
             'carburant': 'Carburant',
             'reparation': 'Réparation',
             'autre': 'Autre'
@@ -7088,6 +7141,9 @@ async function exportExpensesCSV() {
             'assurance': 'Assurance',
             'pneu': 'Pneu',
             'vidange': 'Vidange',
+            'carte_stationnement': 'Carte de stationnement',
+            'patente': 'Patente',
+            'visite_technique': 'Visite technique',
             'carburant': 'Carburant',
             'reparation': 'Réparation',
             'autre': 'Autre'
@@ -7183,6 +7239,9 @@ async function exportExpensesPDF() {
             'assurance': 'Assurance',
             'pneu': 'Pneu',
             'vidange': 'Vidange',
+            'carte_stationnement': 'Carte de stationnement',
+            'patente': 'Patente',
+            'visite_technique': 'Visite technique',
             'carburant': 'Carburant',
             'reparation': 'Réparation',
             'autre': 'Autre'
@@ -9654,5 +9713,291 @@ function addAIMessage(text, type, suggestions = []) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
     return messageDiv;
+}
+
+// =========================================================================
+// SYSTÈME DE SUIVI DES DOCUMENTS ET ALERTES DE VALIDITÉ
+// =========================================================================
+
+// Config des seuils et documents
+const DOC_TRACKING_CONFIG = {
+    'vidange': { label: 'Vidange', icon: 'fa-oil-can', defaultDays: 15, warningDays: 3 },
+    'assurance': { label: 'Assurance', icon: 'fa-shield-halved', defaultDays: 90, warningDays: 15 },
+    'carte_stationnement': { label: 'Carte de stationnement', icon: 'fa-square-parking', defaultDays: 365, warningDays: 15 },
+    'patente': { label: 'Patente', icon: 'fa-file-invoice-dollar', defaultDays: 365, warningDays: 30 },
+    'visite_technique': { label: 'Visite technique', icon: 'fa-wrench', defaultDays: 180, warningDays: 15 }
+};
+
+// Fonction pour envoyer des notifications locales sur le navigateur
+function sendBrowserNotification(title, body) {
+    if (!('Notification' in window)) return;
+    
+    if (Notification.permission === 'granted') {
+        if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+            navigator.serviceWorker.ready.then(registration => {
+                registration.showNotification(title, {
+                    body: body,
+                    icon: './icon-192.png',
+                    badge: './icon-192.png',
+                    vibrate: [200, 100, 200]
+                });
+            }).catch(err => {
+                new Notification(title, { body: body, icon: './icon-192.png' });
+            });
+        } else {
+            new Notification(title, { body: body, icon: './icon-192.png' });
+        }
+    } else if (Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                sendBrowserNotification(title, body);
+            }
+        });
+    }
+}
+
+// Fonction pour ouvrir le modal de renouvellement pré-rempli
+function openRenewExpenseModal(matricule, type) {
+    openExpenseModal();
+    
+    // Remplir les champs
+    document.getElementById('expenseType').value = type;
+    document.getElementById('expenseMatricule').value = matricule;
+    
+    const labels = {
+        'vidange': 'Vidange périodique',
+        'assurance': 'Renouvellement assurance',
+        'carte_stationnement': 'Renouvellement carte de stationnement',
+        'patente': 'Paiement patente',
+        'visite_technique': 'Renouvellement visite technique'
+    };
+    
+    document.getElementById('expenseDescription').value = labels[type] || 'Renouvellement';
+    
+    // Déclencher le changement pour mettre à jour les affichages
+    const event = new Event('change');
+    document.getElementById('expenseType').dispatchEvent(event);
+}
+
+// Fonction pour générer le HTML des pastilles colorées pour le tableau des taxis
+function renderTaxiDocumentsBadges(matricule) {
+    const expenses = allData.expenses || [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const taxiExpenses = expenses.filter(e => e.matricule === matricule);
+
+    const badgesHtml = Object.keys(DOC_TRACKING_CONFIG).map(type => {
+        const typeExpenses = taxiExpenses.filter(e => e.type === type);
+        const config = DOC_TRACKING_CONFIG[type];
+
+        if (typeExpenses.length === 0) {
+            return `
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-400 border border-slate-200 hover:scale-110 transition-transform cursor-pointer" title="${config.label} : Non enregistré" onclick="openRenewExpenseModal('${matricule}', '${type}')">
+                    <i class="fa-solid ${config.icon} text-xs"></i>
+                </span>
+            `;
+        }
+
+        // Trier par date décroissante pour prendre la dernière dépense
+        typeExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const lastExp = typeExpenses[0];
+        const lastExpDate = new Date(lastExp.date);
+        lastExpDate.setHours(0, 0, 0, 0);
+
+        let expirationDate = null;
+        const match = (lastExp.description || '').match(/\[EXPIRATION:(\d{4}-\d{2}-\d{2})\]/);
+        if (match) {
+            expirationDate = new Date(match[1]);
+        } else {
+            expirationDate = new Date(lastExpDate);
+            expirationDate.setDate(expirationDate.getDate() + config.defaultDays);
+        }
+        expirationDate.setHours(0, 0, 0, 0);
+
+        const timeDiff = expirationDate.getTime() - today.getTime();
+        const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+        let colorClass = 'bg-emerald-100 text-emerald-700 border-emerald-300';
+        let tooltipText = `${config.label} : En règle (jusqu'au ${expirationDate.toLocaleDateString('fr-FR')}, dans ${daysLeft} jours)`;
+
+        if (daysLeft < 0) {
+            colorClass = 'bg-red-100 text-red-700 border-red-300 animate-pulse';
+            tooltipText = `${config.label} : EXPIRÉ le ${expirationDate.toLocaleDateString('fr-FR')} (il y a ${Math.abs(daysLeft)} jours)`;
+        } else if (daysLeft <= config.warningDays) {
+            colorClass = 'bg-amber-100 text-amber-700 border-amber-300';
+            tooltipText = `${config.label} : EXPIRATION PROCHE le ${expirationDate.toLocaleDateString('fr-FR')} (dans ${daysLeft} jours)`;
+        }
+
+        return `
+            <span class="inline-flex items-center justify-center w-8 h-8 rounded-full border hover:scale-110 transition-transform cursor-pointer ${colorClass}" title="${tooltipText}" onclick="openRenewExpenseModal('${matricule}', '${type}')">
+                <i class="fa-solid ${config.icon} text-xs"></i>
+            </span>
+        `;
+    }).join(' ');
+
+    return `<div class="flex items-center justify-center gap-1.5">${badgesHtml}</div>`;
+}
+
+// Fonction principale pour calculer les expirations et afficher les alertes sur le Dashboard
+function displayDocumentAlerts(taxis) {
+    const container = document.getElementById('documentAlertsContainer');
+    const section = document.getElementById('documentAlertsSection');
+    if (!container || !section) return;
+
+    const alerts = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const expenses = allData.expenses || [];
+
+    taxis.forEach(taxi => {
+        const taxiExpenses = expenses.filter(e => e.matricule === taxi.matricule);
+
+        Object.keys(DOC_TRACKING_CONFIG).forEach(type => {
+            const typeExpenses = taxiExpenses.filter(e => e.type === type);
+            const config = DOC_TRACKING_CONFIG[type];
+
+            if (typeExpenses.length === 0) {
+                alerts.push({
+                    taxi: taxi,
+                    type: type,
+                    label: config.label,
+                    icon: config.icon,
+                    state: 'missing',
+                    message: `Aucun enregistrement trouvé pour le document.`,
+                    daysLeft: -9999
+                });
+                return;
+            }
+
+            typeExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const lastExp = typeExpenses[0];
+            const lastExpDate = new Date(lastExp.date);
+            lastExpDate.setHours(0, 0, 0, 0);
+
+            let expirationDate = null;
+            const match = (lastExp.description || '').match(/\[EXPIRATION:(\d{4}-\d{2}-\d{2})\]/);
+            if (match) {
+                expirationDate = new Date(match[1]);
+            } else {
+                expirationDate = new Date(lastExpDate);
+                expirationDate.setDate(expirationDate.getDate() + config.defaultDays);
+            }
+            expirationDate.setHours(0, 0, 0, 0);
+
+            const timeDiff = expirationDate.getTime() - today.getTime();
+            const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+            let state = 'ok';
+            if (daysLeft < 0) {
+                state = 'expired';
+            } else if (daysLeft <= config.warningDays) {
+                state = 'warning';
+            }
+
+            if (state === 'expired') {
+                const dateStr = expirationDate.toLocaleDateString('fr-FR');
+                alerts.push({
+                    taxi: taxi,
+                    type: type,
+                    label: config.label,
+                    icon: config.icon,
+                    state: 'expired',
+                    message: `Le document <strong>${config.label}</strong> a expiré le ${dateStr} (il y a ${Math.abs(daysLeft)} jours).`,
+                    daysLeft: daysLeft
+                });
+            } else if (state === 'warning') {
+                const dateStr = expirationDate.toLocaleDateString('fr-FR');
+                alerts.push({
+                    taxi: taxi,
+                    type: type,
+                    label: config.label,
+                    icon: config.icon,
+                    state: 'warning',
+                    message: `Le document <strong>${config.label}</strong> expire le ${dateStr} (dans ${daysLeft} jours).`,
+                    daysLeft: daysLeft
+                });
+            }
+        });
+    });
+
+    // Rendre la section visible
+    section.style.display = 'block';
+
+    if (alerts.length === 0) {
+        container.innerHTML = `
+            <div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-6 col-span-full text-center">
+                <div class="inline-flex items-center justify-center p-3 bg-emerald-100 rounded-full mb-3 text-emerald-600">
+                    <i class="fa-solid fa-circle-check text-2xl"></i>
+                </div>
+                <h4 class="font-bold text-md mb-1">Tous les documents sont en règle !</h4>
+                <p class="text-sm text-emerald-600">
+                    Les assurances, visites techniques, vidanges, patentes et cartes de stationnement de toute la flotte sont à jour.
+                </p>
+            </div>
+        `;
+        return;
+    }
+
+    // Trier les alertes : d'abord expirées, puis avertissements
+    alerts.sort((a, b) => {
+        if (a.state === 'expired' && b.state !== 'expired') return -1;
+        if (a.state !== 'expired' && b.state === 'expired') return 1;
+        return a.daysLeft - b.daysLeft;
+    });
+
+    container.innerHTML = alerts.map(alert => {
+        const isExpired = alert.state === 'expired';
+        const isMissing = alert.state === 'missing';
+        const bgColor = isExpired ? 'bg-red-50 border-red-200 text-red-800' : (isMissing ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-amber-50 border-amber-200 text-amber-800');
+        const iconColor = isExpired ? 'text-red-600 bg-red-100' : (isMissing ? 'text-slate-500 bg-slate-100' : 'text-amber-600 bg-amber-100');
+        const badgeText = isExpired ? 'Expiré' : (isMissing ? 'Manquant' : 'À renouveler');
+        const badgeColor = isExpired ? 'bg-red-200 text-red-900' : (isMissing ? 'bg-slate-200 text-slate-800' : 'bg-amber-200 text-amber-900');
+
+        return `
+            <div class="rounded-xl border p-4 shadow-sm ${bgColor} flex flex-col justify-between">
+                <div class="flex items-start gap-3 mb-3">
+                    <div class="p-2 rounded-lg ${iconColor} flex-shrink-0">
+                        <i class="fa-solid ${alert.icon} text-lg"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 mb-1">
+                            <span class="text-xs font-bold uppercase tracking-wider">${alert.label}</span>
+                            <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold ${badgeColor}">${badgeText}</span>
+                        </div>
+                        <h4 class="font-bold text-sm text-slate-800 mb-1">Taxi : ${alert.taxi.matricule}</h4>
+                        <p class="text-xs text-slate-600 leading-relaxed">${alert.message}</p>
+                    </div>
+                </div>
+                ${!isMissing && currentRole === 'gestionnaire' ? `
+                <div class="mt-2 pt-2 border-t border-slate-100 flex justify-end">
+                    <button class="btn btn-sm btn-primary flex items-center gap-1.5 text-xs px-3 py-1.5" onclick="openRenewExpenseModal('${alert.taxi.matricule}', '${alert.type}')">
+                        <i class="fa-solid fa-arrows-rotate"></i> Enregistrer Renouvellement
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }).join('');
+
+    // Déclencher les notifications natives si des alertes existent (une fois par session)
+    const expiredAlerts = alerts.filter(a => a.state === 'expired');
+    const warningAlerts = alerts.filter(a => a.state === 'warning');
+    
+    if (expiredAlerts.length > 0 || warningAlerts.length > 0) {
+        const lastNotified = sessionStorage.getItem('last_document_notification');
+        if (!lastNotified) {
+            let body = '';
+            if (expiredAlerts.length > 0) {
+                body += `${expiredAlerts.length} document(s) expiré(s). `;
+            }
+            if (warningAlerts.length > 0) {
+                body += `${warningAlerts.length} document(s) arrivant à échéance.`;
+            }
+            sendBrowserNotification("Alerte Documents Couronne de Vie", body);
+            sessionStorage.setItem('last_document_notification', Date.now().toString());
+        }
+    }
 }
 
