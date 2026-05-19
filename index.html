@@ -119,6 +119,7 @@
     <input type="radio" name="nav" id="nav-ai" hidden>
     <input type="radio" name="nav" id="nav-settings" hidden>
     <input type="radio" name="nav" id="nav-batch" hidden>
+    <input type="radio" name="nav" id="nav-documents" hidden>
 
     <div class="flex h-screen overflow-hidden" id="mainApp" style="display: none;">
       
@@ -175,6 +176,11 @@
           <label for="nav-expenses" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="expenses">
             <i class="fa-solid fa-money-bill-wave w-5 text-center"></i>
             <span class="font-medium">Dépenses</span>
+          </label>
+
+          <label for="nav-documents" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="documents">
+            <i class="fa-solid fa-file-shield w-5 text-center"></i>
+            <span class="font-medium">Documents</span>
           </label>
 
           <div class="pt-4 pb-1 role-gestionnaire">
@@ -273,6 +279,11 @@
           <label for="nav-expenses" class="nav-link nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="expenses">
             <i class="fa-solid fa-money-bill-wave w-5 text-center"></i>
             <span class="font-medium">Dépenses</span>
+          </label>
+
+          <label for="nav-documents" class="nav-link nav-item flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors text-slate-300" data-page="documents">
+            <i class="fa-solid fa-file-shield w-5 text-center"></i>
+            <span class="font-medium">Documents</span>
           </label>
 
           <div class="pt-4 pb-1 role-gestionnaire">
@@ -748,6 +759,107 @@
 
               <div class="p-2 space-y-2" id="expensesCardsContainer">
                 <div class="text-center py-8 text-slate-400">Aucune dépense enregistrée</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ============================ -->
+          <!-- VIEW: DOCUMENTS -->
+          <!-- ============================ -->
+          <div id="view-documents" class="view-section">
+            <!-- Header amélioré -->
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+              <div>
+                <h3 class="font-bold text-xl sm:text-2xl text-slate-800">Suivi Global des Documents</h3>
+                <p class="text-xs sm:text-sm text-slate-500 mt-1">Gerez la validite des pieces administratives et les renouvellements de la flotte</p>
+              </div>
+              <div class="flex flex-wrap gap-2 role-gestionnaire">
+                <button onclick="openExpenseModal()" class="btn btn-primary text-sm py-2 px-4">
+                  <i class="fa-solid fa-plus-circle mr-1.5"></i>Nouvelle Depense / Document
+                </button>
+              </div>
+            </div>
+
+            <!-- Cards de Statistiques des Documents -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              <!-- KPI: Total Taxis -->
+              <div class="bg-gradient-to-br from-slate-50 to-slate-100 p-4 rounded-xl border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] sm:text-xs font-bold text-slate-500 uppercase">Total Vehicules</span>
+                  <div class="p-1.5 bg-slate-200 text-slate-600 rounded-lg text-xs">
+                    <i class="fa-solid fa-car"></i>
+                  </div>
+                </div>
+                <h4 class="text-xl sm:text-2xl font-extrabold text-slate-800" id="docKpiTotalTaxis">0</h4>
+              </div>
+
+              <!-- KPI: En regle -->
+              <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 rounded-xl border border-emerald-200 shadow-sm transition-all duration-300 hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] sm:text-xs font-bold text-emerald-700 uppercase">A Jour / En regle</span>
+                  <div class="p-1.5 bg-emerald-200 text-emerald-700 rounded-lg text-xs">
+                    <i class="fa-solid fa-check-circle"></i>
+                  </div>
+                </div>
+                <h4 class="text-xl sm:text-2xl font-extrabold text-emerald-800" id="docKpiOk">0</h4>
+              </div>
+
+              <!-- KPI: Expiration Proche -->
+              <div class="bg-gradient-to-br from-amber-50 to-amber-100 p-4 rounded-xl border border-amber-200 shadow-sm transition-all duration-300 hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] sm:text-xs font-bold text-amber-700 uppercase">Echeance Proche</span>
+                  <div class="p-1.5 bg-amber-200 text-amber-700 rounded-lg text-xs">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                  </div>
+                </div>
+                <h4 class="text-xl sm:text-2xl font-extrabold text-amber-800" id="docKpiWarning">0</h4>
+              </div>
+
+              <!-- KPI: Expire / Manquant -->
+              <div class="bg-gradient-to-br from-red-50 to-red-100 p-4 rounded-xl border border-red-200 shadow-sm transition-all duration-300 hover:shadow-md">
+                <div class="flex items-center justify-between mb-2">
+                  <span class="text-[10px] sm:text-xs font-bold text-red-700 uppercase">Expires / Manquants</span>
+                  <div class="p-1.5 bg-red-200 text-red-700 rounded-lg text-xs">
+                    <i class="fa-solid fa-circle-xmark"></i>
+                  </div>
+                </div>
+                <h4 class="text-xl sm:text-2xl font-extrabold text-red-800" id="docKpiExpired">0</h4>
+              </div>
+            </div>
+
+            <!-- Filtres et Recherche -->
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+              <div class="flex flex-col md:flex-row md:items-center gap-4">
+                <div class="flex-1 relative">
+                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                  <input type="text" id="docSearchTaxi" class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 text-sm focus:border-brand-500 outline-none" placeholder="Rechercher par matricule, marque, proprietaire...">
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <select id="docFilterStatus" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium focus:border-brand-500 outline-none">
+                    <option value="all">Tous les statuts</option>
+                    <option value="expired">Expires uniquement</option>
+                    <option value="warning">Echeance proche uniquement</option>
+                    <option value="ok">En regle uniquement</option>
+                    <option value="missing">Manquants uniquement</option>
+                  </select>
+                  <select id="docFilterType" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-sm font-medium focus:border-brand-500 outline-none">
+                    <option value="all">Tous les documents</option>
+                    <option value="vidange">Vidange uniquement</option>
+                    <option value="assurance">Assurance uniquement</option>
+                    <option value="carte_stationnement">Carte de stationnement uniquement</option>
+                    <option value="patente">Patente uniquement</option>
+                    <option value="visite_technique">Visite technique uniquement</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Liste des Vehicules et Details de leurs Documents -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="taxisDocumentsGrid">
+              <!-- Rendu dynamique par JS -->
+              <div class="col-span-full text-center py-12 text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-3xl mb-3"></i>
+                <p>Chargement des documents de la flotte...</p>
               </div>
             </div>
           </div>

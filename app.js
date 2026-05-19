@@ -1612,7 +1612,8 @@ function initNavigation() {
                 'nav-expenses': 'expenses',
                 'nav-report': 'report',
                 'nav-ai': 'ai-assistant',
-                'nav-settings': 'settings'
+                'nav-settings': 'settings',
+                'nav-documents': 'documents'
             };
             
             label.addEventListener('click', (e) => {
@@ -1660,7 +1661,8 @@ function showPage(pageId) {
         'report': 'view-report',
         'ai-assistant': 'view-ai',
         'settings': 'view-settings',
-        'batch-versement': 'view-batch'
+        'batch-versement': 'view-batch',
+        'documents': 'view-documents'
     };
     
     // Obtenir l'ID réel de la section
@@ -1741,6 +1743,9 @@ function showPage(pageId) {
             break;
         case 'batch-versement':
             loadBatchVersementPage();
+            break;
+        case 'documents':
+            loadDocumentsPage();
             break;
     }
     
@@ -9999,5 +10004,321 @@ function displayDocumentAlerts(taxis) {
             sessionStorage.setItem('last_document_notification', Date.now().toString());
         }
     }
+}
+
+// =========================================================================
+// GESTION & RENDU DE LA PAGE DEDIEE AUX DOCUMENTS
+// =========================================================================
+
+async function loadDocumentsPage() {
+    try {
+        const taxis = await getAllTaxis();
+        
+        // Initialiser l'affichage
+        displayDocumentsGrid(taxis);
+        
+        // Configurer les filtres temps réel
+        setupDocumentsFilters(taxis);
+    } catch (error) {
+        console.error('Erreur dans loadDocumentsPage:', error);
+        const grid = document.getElementById('taxisDocumentsGrid');
+        if (grid) {
+            grid.innerHTML = `
+                <div class="col-span-full text-center py-12 text-red-500">
+                    <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
+                    <p>Erreur lors du chargement des documents.</p>
+                </div>
+            `;
+        }
+    }
+}
+
+function setupDocumentsFilters(taxis) {
+    if (window.docFiltersInitialized) return;
+    
+    const searchInput = document.getElementById('docSearchTaxi');
+    const statusFilter = document.getElementById('docFilterStatus');
+    const typeFilter = document.getElementById('docFilterType');
+    
+    const triggerFilter = async () => {
+        const currentTaxis = await getAllTaxis();
+        const query = searchInput ? searchInput.value : '';
+        const status = statusFilter ? statusFilter.value : 'all';
+        const type = typeFilter ? typeFilter.value : 'all';
+        displayDocumentsGrid(currentTaxis, query, status, type);
+    };
+    
+    if (searchInput) searchInput.addEventListener('input', triggerFilter);
+    if (statusFilter) statusFilter.addEventListener('change', triggerFilter);
+    if (typeFilter) typeFilter.addEventListener('change', triggerFilter);
+    
+    window.docFiltersInitialized = true;
+}
+
+function displayDocumentsGrid(taxis, query = '', statusFilter = 'all', typeFilter = 'all') {
+    const grid = document.getElementById('taxisDocumentsGrid');
+    if (!grid) return;
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const expenses = allData.expenses || [];
+    
+    // 1. Calculer les statistiques globales pour les KPIs (basés sur TOUTE la flotte)
+    let okCount = 0;
+    let warningCount = 0;
+    let expiredCount = 0;
+    
+    taxis.forEach(taxi => {
+        Object.keys(DOC_TRACKING_CONFIG).forEach(type => {
+            const taxiExpenses = expenses.filter(e => e.matricule === taxi.matricule && e.type === type);
+            if (taxiExpenses.length === 0) {
+                expiredCount++; // Manquant = expiré administrativement
+                return;
+            }
+            
+            // Prendre la dernière dépense
+            taxiExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const lastExp = taxiExpenses[0];
+            const lastExpDate = new Date(lastExp.date);
+            lastExpDate.setHours(0, 0, 0, 0);
+            
+            let expirationDate = null;
+            const match = (lastExp.description || '').match(/\[EXPIRATION:(\d{4}-\d{2}-\d{2})\]/);
+            if (match) {
+                expirationDate = new Date(match[1]);
+            } else {
+                expirationDate = new Date(lastExpDate);
+                expirationDate.setDate(expirationDate.getDate() + DOC_TRACKING_CONFIG[type].defaultDays);
+            }
+            expirationDate.setHours(0, 0, 0, 0);
+            
+            const timeDiff = expirationDate.getTime() - today.getTime();
+            const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+            
+            if (daysLeft < 0) {
+                expiredCount++;
+            } else if (daysLeft <= DOC_TRACKING_CONFIG[type].warningDays) {
+                warningCount++;
+            } else {
+                okCount++;
+            }
+        });
+    });
+    
+    // Mettre à jour les KPIs
+    const kpiTotal = document.getElementById('docKpiTotalTaxis');
+    const kpiOk = document.getElementById('docKpiOk');
+    const kpiWarning = document.getElementById('docKpiWarning');
+    const kpiExpired = document.getElementById('docKpiExpired');
+    
+    if (kpiTotal) kpiTotal.textContent = taxis.length;
+    if (kpiOk) kpiOk.textContent = okCount;
+    if (kpiWarning) kpiWarning.textContent = warningCount;
+    if (kpiExpired) kpiExpired.textContent = expiredCount;
+    
+    // 2. Filtrer les taxis pour l'affichage dans la grille
+    const q = query.toLowerCase().trim();
+    let filteredTaxis = taxis.filter(taxi => {
+        if (!q) return true;
+        const matricule = (taxi.matricule || '').toLowerCase();
+        const marque = (taxi.marque || '').toLowerCase();
+        const proprietaire = (taxi.proprietaire || '').toLowerCase();
+        const chauffeur = (taxi.nom_chauffeur || '').toLowerCase();
+        return matricule.includes(q) || marque.includes(q) || proprietaire.includes(q) || chauffeur.includes(q);
+    });
+    
+    // Fonction d'obtention de l'état d'un document pour un taxi
+    const getDocState = (taxi, type) => {
+        const taxiExpenses = expenses.filter(e => e.matricule === taxi.matricule && e.type === type);
+        const config = DOC_TRACKING_CONFIG[type];
+        
+        if (taxiExpenses.length === 0) {
+            return {
+                state: 'missing',
+                label: config.label,
+                icon: config.icon,
+                daysLeft: -999,
+                lastDateStr: 'Non enregistre',
+                expirationDateStr: 'Inconnue',
+                expenseId: null,
+                percent: 0
+            };
+        }
+        
+        taxiExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const lastExp = taxiExpenses[0];
+        const lastExpDate = new Date(lastExp.date);
+        lastExpDate.setHours(0, 0, 0, 0);
+        
+        let expirationDate = null;
+        const match = (lastExp.description || '').match(/\[EXPIRATION:(\d{4}-\d{2}-\d{2})\]/);
+        if (match) {
+            expirationDate = new Date(match[1]);
+        } else {
+            expirationDate = new Date(lastExpDate);
+            expirationDate.setDate(expirationDate.getDate() + config.defaultDays);
+        }
+        expirationDate.setHours(0, 0, 0, 0);
+        
+        const timeDiff = expirationDate.getTime() - today.getTime();
+        const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+        
+        let state = 'ok';
+        if (daysLeft < 0) {
+            state = 'expired';
+        } else if (daysLeft <= config.warningDays) {
+            state = 'warning';
+        }
+        
+        const percent = Math.max(0, Math.min(100, Math.round((daysLeft / config.defaultDays) * 100)));
+        
+        return {
+            state: state,
+            label: config.label,
+            icon: config.icon,
+            daysLeft: daysLeft,
+            lastDateStr: lastExpDate.toLocaleDateString('fr-FR'),
+            expirationDateStr: expirationDate.toLocaleDateString('fr-FR'),
+            expenseId: lastExp.id,
+            percent: percent
+        };
+    };
+    
+    // Filtrer par état et par type
+    let displayedTaxis = filteredTaxis.filter(taxi => {
+        if (typeFilter !== 'all' && statusFilter !== 'all') {
+            const doc = getDocState(taxi, typeFilter);
+            return doc.state === statusFilter;
+        } else if (typeFilter !== 'all' && statusFilter === 'all') {
+            return true;
+        } else if (typeFilter === 'all' && statusFilter !== 'all') {
+            // Doit correspondre à au moins un document avec cet état
+            return Object.keys(DOC_TRACKING_CONFIG).some(type => {
+                const doc = getDocState(taxi, type);
+                return doc.state === statusFilter;
+            });
+        }
+        return true;
+    });
+    
+    // 3. Rendre la grille HTML
+    if (displayedTaxis.length === 0) {
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-12 bg-white rounded-xl border border-slate-200 shadow-sm text-slate-400">
+                <i class="fa-solid fa-folder-open text-4xl mb-3 text-slate-300"></i>
+                <p class="font-medium text-slate-500">Aucun vehicule ne correspond aux filtres actuels</p>
+                <button onclick="document.getElementById('docSearchTaxi').value=''; document.getElementById('docFilterStatus').value='all'; document.getElementById('docFilterType').value='all'; displayDocumentsGrid(allData.taxis || []);" class="mt-3 text-sm text-brand-600 font-semibold hover:underline">
+                    Effacer les filtres
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    grid.innerHTML = displayedTaxis.map(taxi => {
+        const docsHtml = Object.keys(DOC_TRACKING_CONFIG).map(type => {
+            const doc = getDocState(taxi, type);
+            
+            // Badge coloré et texte
+            let badgeBg = 'bg-slate-100 text-slate-600 border-slate-200';
+            let statusText = 'Non enregistre';
+            let barBg = 'bg-slate-300';
+            let remainingText = 'Non configure';
+            
+            if (doc.state === 'ok') {
+                badgeBg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                statusText = 'A jour';
+                barBg = 'bg-emerald-500';
+                remainingText = `Reste ${doc.daysLeft} jours`;
+            } else if (doc.state === 'warning') {
+                badgeBg = 'bg-amber-50 text-amber-700 border-amber-200';
+                statusText = 'Echeance proche';
+                barBg = 'bg-amber-500';
+                remainingText = `Reste ${doc.daysLeft} jours`;
+            } else if (doc.state === 'expired') {
+                badgeBg = 'bg-red-50 text-red-700 border-red-200';
+                statusText = 'Expire';
+                barBg = 'bg-red-500';
+                remainingText = `Expire depuis ${Math.abs(doc.daysLeft)} jours`;
+            } else if (doc.state === 'missing') {
+                badgeBg = 'bg-slate-100 text-slate-600 border-slate-200';
+                statusText = 'Manquant';
+                barBg = 'bg-slate-300';
+                remainingText = 'Aucun enregistrement';
+            }
+            
+            // Rendre le progress bar HTML
+            const showProgressBar = doc.state === 'ok' || doc.state === 'warning';
+            const progressBarHtml = showProgressBar ? `
+                <div class="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+                    <div class="h-1.5 rounded-full ${barBg} transition-all" style="width: ${doc.percent}%"></div>
+                </div>
+            ` : `
+                <div class="w-full bg-slate-100 rounded-full h-1.5 mt-2">
+                    <div class="h-1.5 rounded-full ${barBg} transition-all" style="width: ${doc.state === 'expired' ? '100' : '0'}%"></div>
+                </div>
+            `;
+            
+            // Actions réservées au gestionnaire
+            const actionsHtml = currentRole === 'gestionnaire' ? `
+                <div class="flex items-center gap-1">
+                    ${doc.expenseId ? `
+                    <button onclick="openExpenseModal(${doc.expenseId})" class="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Modifier la depense d'origine">
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
+                    </button>
+                    ` : ''}
+                    <button onclick="openRenewExpenseModal('${taxi.matricule}', '${type}')" class="p-1 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Renouveler ce document">
+                        <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                    </button>
+                </div>
+            ` : '';
+            
+            return `
+                <div class="border-b border-slate-100 py-3 last:border-0 last:pb-0">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <div class="w-6 h-6 rounded bg-slate-50 flex items-center justify-center text-slate-500 text-xs">
+                                <i class="fa-solid ${doc.icon}"></i>
+                            </div>
+                            <span class="text-xs font-semibold text-slate-700">${doc.label}</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] px-2 py-0.5 rounded border font-semibold ${badgeBg}">${statusText}</span>
+                            ${actionsHtml}
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between mt-1.5 text-[10px] text-slate-500">
+                        <span>Périme le : <strong class="${doc.state === 'expired' ? 'text-red-600' : 'text-slate-600'}">${doc.expirationDateStr}</strong></span>
+                        <span class="font-medium">${remainingText}</span>
+                    </div>
+                    ${progressBarHtml}
+                </div>
+            `;
+        }).join('');
+        
+        return `
+            <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between">
+                <div>
+                    <!-- Entête carte taxi -->
+                    <div class="flex items-start justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <i class="fa-solid fa-car text-brand-500 text-sm"></i>
+                                <h4 class="font-extrabold text-slate-800 text-base tracking-tight">${taxi.matricule}</h4>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5">${taxi.marque || 'Modele inconnu'} | ${taxi.proprietaire || 'Pas de proprietaire'}</p>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium">${taxi.nom_chauffeur || 'Sans chauffeur'}</span>
+                    </div>
+                    
+                    <!-- Documents list -->
+                    <div class="space-y-1">
+                        ${docsHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
 }
 

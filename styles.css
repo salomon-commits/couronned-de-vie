@@ -152,6 +152,9 @@ header.bg-white {
 #nav-settings:checked ~ div #view-settings {
     display: block !important;
 }
+#nav-documents:checked ~ div #view-documents {
+    display: block !important;
+}
 
 /* Masquer toutes les autres pages quand une est sélectionnée (radio hack) */
 /* Quand dashboard est sélectionné, masquer toutes les autres */
@@ -276,6 +279,7 @@ header.bg-white {
 #nav-taxis:checked ~ div aside label[for="nav-taxis"],
 #nav-drivers:checked ~ div aside label[for="nav-drivers"],
 #nav-expenses:checked ~ div aside label[for="nav-expenses"],
+#nav-documents:checked ~ div aside label[for="nav-documents"],
 #nav-report:checked ~ div aside label[for="nav-report"],
 #nav-ai:checked ~ div aside label[for="nav-ai"],
 #nav-settings:checked ~ div aside label[for="nav-settings"] {
@@ -292,6 +296,8 @@ header.bg-white {
 #nav-stats:checked ~ div aside label[for="nav-stats"] i,
 #nav-taxis:checked ~ div aside label[for="nav-taxis"] i,
 #nav-drivers:checked ~ div aside label[for="nav-drivers"] i,
+#nav-expenses:checked ~ div aside label[for="nav-expenses"] i,
+#nav-documents:checked ~ div aside label[for="nav-documents"] i,
 #nav-report:checked ~ div aside label[for="nav-report"] i,
 #nav-ai:checked ~ div aside label[for="nav-ai"] i,
 #nav-settings:checked ~ div aside label[for="nav-settings"] i {
